@@ -3,14 +3,15 @@ const Schema = mongoose.Schema;
 
 const productSchema = new Schema(
   {
-    name: { type: String, required: true },
-    wholesalePrice: { type: Number, required: true },
-    wholesalePriceDate: { type: Date, required: true },
-    sellingPrice: { type: Number, required: true },
-    numberInBox: { type: Number, required: true },
+    productName: { type: String, required: true },
+    wholesalePackagePrice: { type: Number, required: true },
+    untisPerPackage: { type: Number, required: true },
+    wholesaleUnitPrice: { type: Number, required: true },
+    retailUnitPrice: { type: Number, required: true },
+    latestWholeprice: { type: Date, required: true },
   },
   { timestamps: true }
 );
 
-productSchema.index({ name: "text" });
+productSchema.index({ productName: "text" });
 export default mongoose.model("Product", productSchema);

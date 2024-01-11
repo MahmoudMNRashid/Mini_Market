@@ -5,15 +5,25 @@ import { deleteProduct,addProduct, updateProduct, searchProduct, searchProduct_E
 
 
 const validateAddProduct = [
-    body('name').notEmpty().withMessage('Product name is required'),
-    body('wholesalePrice')
-      .isNumeric().withMessage('Wholesale price must be a number')
+    body('productName').notEmpty().withMessage('Product name is required'),
+
+    body('wholesalePackagePrice')
+      .isNumeric().withMessage('Wholesale package price must be a number')
       .custom(value => value >= 0).withMessage('Wholesale must be a positive number'),
-    body('sellingPrice').isNumeric().withMessage('Selling price must be a number')
-    .custom(value => value >= 0).withMessage('Selling price must be a positive number'),
-    body('numberInBox')
-    .isNumeric().withMessage('Number in box must be a number')
-    .custom(value => value >= 0).withMessage('Number in box must be a positive number'),
+
+      body('untisPerPackage')
+      .isNumeric().withMessage('Untis per package must be a number')
+      .custom(value => value >= 0).withMessage('Untis per package must be a positive number'),
+
+    body('wholesaleUnitPrice').isNumeric().withMessage('wholesale unit price must be a number')
+    .custom(value => value >= 0).withMessage('wholesale unit price must be a positive number'),
+
+    body('retailUnitPrice').isNumeric().withMessage('Retail unit price must be a number')
+    .custom(value => value >= 0).withMessage('Retail unit price must be a positive number'),
+
+
+
+
 ];
   
 

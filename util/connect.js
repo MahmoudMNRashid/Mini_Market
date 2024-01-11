@@ -12,7 +12,7 @@ export const connect = async () => {
       `mongodb+srv://${process.env.MONGO_CONNECT_USER_NAME}:${process.env.MONGO_CONNECT_PASSWORD}@clusterrashid.qdwwmja.mongodb.net/${process.env.MONGO_CONNECT_DB}`
     );
     const server = app.listen(port);
-    
+    // console.log('Connected')
     server.timeout = 600000;
   } catch (error) {
     if (!error.statusCode) {

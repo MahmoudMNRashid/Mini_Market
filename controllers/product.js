@@ -4,10 +4,11 @@ import { esClient } from "../elasticsearch.js";
 export const addProduct = async (req, res, next) => {
   
   const errors = validationResult(req);
-  const name = req.body.name;
-  const wholesalePrice = req.body.wholesalePrice;
-  const sellingPrice = req.body.sellingPrice;
-  const numberInBox = req.body.numberInBox;
+  const productName = req.body.productName;
+  const wholesalePackagePrice = req.body.wholesalePackagePrice;
+  const untisPerPackage = req.body.untisPerPackage;
+  const wholesaleUnitPrice = req.body.wholesaleUnitPrice;
+  const retailUnitPrice = req.body.retailUnitPrice;
 
   try {
     if (!errors.isEmpty()) {
@@ -17,7 +18,7 @@ export const addProduct = async (req, res, next) => {
       throw error;
     }
     const existProduct = await Product.find({
-      name: { $regex: new RegExp(name, "i") },
+      productName: { $regex: new RegExp(productName, "i") },
     });
 
     if (existProduct.length > 0) {
@@ -26,16 +27,16 @@ export const addProduct = async (req, res, next) => {
       throw error;
     }
 
-    const currentDate = new Date();
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth() + 1; // Month is zero-based, so add 1
-    const day = currentDate.getDate();
+  
+
     const product = {
-      name,
-      wholesalePrice,
-      sellingPrice,
-      wholesalePriceDate: new Date(),
-      numberInBox,
+      productName,
+      wholesalePackagePrice,
+      untisPerPackage,
+      wholesaleUnitPrice,
+      retailUnitPrice,
+      latestWholeprice:new Date()
+   
     };
 
     const newProduct = new Product(product);
@@ -48,10 +49,11 @@ export const addProduct = async (req, res, next) => {
 export const updateProduct = async (req, res, next) => {
   const productId = req.params.productId;
   const errors = validationResult(req);
-  const name = req.body.name;
-  const wholesalePrice = req.body.wholesalePrice;
-  const sellingPrice = req.body.sellingPrice;
-  const numberInBox = req.body.numberInBox;
+  const productName = req.body.productName;
+  const wholesalePackagePrice = req.body.wholesalePackagePrice;
+  const untisPerPackage = req.body.untisPerPackage;
+  const wholesaleUnitPrice = req.body.wholesaleUnitPrice;
+  const retailUnitPrice = req.body.retailUnitPrice;
 
   try {
     if (!errors.isEmpty()) {
@@ -68,16 +70,14 @@ export const updateProduct = async (req, res, next) => {
       throw error;
     }
 
-    const currentDate = new Date();
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth() + 1; // Month is zero-based, so add 1
-    const day = currentDate.getDate();
+  
 
-    product.name = name;
-    product.wholesalePrice = wholesalePrice;
-    product.sellingPrice = sellingPrice;
-    product.numberInBox = numberInBox;
-    product.wholesalePriceDate = year + "-" + month + "-" + day;
+    product.productName = productName;
+    product.wholesalePackagePrice = wholesalePackagePrice;
+    product.untisPerPackage = untisPerPackage;
+    product.wholesaleUnitPrice = wholesaleUnitPrice;
+    product.retailUnitPrice = retailUnitPrice
+    product.latestWholeprice=new Date()
 
     await product.save();
 
@@ -106,8 +106,9 @@ export const searchProduct = async (req, res, next) => {
   const searchQuery = req.query.name;
 
   try {
+ 
     const products = await Product.find({
-      name: { $regex: new RegExp(searchQuery, "i") },
+      productName: { $regex: new RegExp(searchQuery, "i") },
     }).limit(20)
     res.json(products);
   } catch (error) {
