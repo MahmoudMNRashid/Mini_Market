@@ -1,7 +1,7 @@
 {
   "type": "module",
   "scripts": {
-    "start": "node app.js"
+    "start": "node index.js"
   },
   "engines": {
     "node": "20.x"
