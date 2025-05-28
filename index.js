@@ -4,15 +4,16 @@ import multer from "multer";
 import dotenv from "dotenv";
 
 import productRoute from "./routes/product.js";
+
 dotenv.config();
 
 connect();
 
-app.get("/test", (req, res) => {
-  res.status(200).json({ message: "Hello World" });
+app.get("/test", async (req, res) => {
+  res.status(200).json({ message: "hello" });
 });
 
-app.use(bodyParser.json()); // application/json
+app.use(bodyParser.json()); // application/jsonss
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader(

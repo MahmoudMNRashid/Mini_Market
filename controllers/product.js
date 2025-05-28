@@ -1,8 +1,9 @@
 import Product from "../models/product.js";
 import { validationResult } from "express-validator";
 import { esClient } from "../elasticsearch.js";
+import axios from "axios";
+import * as cheerio from "cheerio";
 export const addProduct = async (req, res, next) => {
-  
   const errors = validationResult(req);
   const productName = req.body.productName;
   const wholesalePackagePrice = req.body.wholesalePackagePrice;
@@ -27,16 +28,13 @@ export const addProduct = async (req, res, next) => {
       throw error;
     }
 
-  
-
     const product = {
       productName,
       wholesalePackagePrice,
       untisPerPackage,
       wholesaleUnitPrice,
       retailUnitPrice,
-      latestWholeprice:new Date()
-   
+      latestWholeprice: new Date(),
     };
 
     const newProduct = new Product(product);
@@ -70,14 +68,12 @@ export const updateProduct = async (req, res, next) => {
       throw error;
     }
 
-  
-
     product.productName = productName;
     product.wholesalePackagePrice = wholesalePackagePrice;
     product.untisPerPackage = untisPerPackage;
     product.wholesaleUnitPrice = wholesaleUnitPrice;
-    product.retailUnitPrice = retailUnitPrice
-    product.latestWholeprice=new Date()
+    product.retailUnitPrice = retailUnitPrice;
+    product.latestWholeprice = new Date();
 
     await product.save();
 
@@ -106,11 +102,32 @@ export const searchProduct = async (req, res, next) => {
   const searchQuery = req.query.name;
 
   try {
- 
     const products = await Product.find({
       productName: { $regex: new RegExp(searchQuery, "i") },
-    }).limit(40)
+    }).limit(40);
     res.json(products);
+  } catch (error) {
+    next(error);
+  }
+};
+export const getSellPrice = async (req, res, next) => {
+  try {
+    const response = await axios.get(
+      "https://www.sp-today.com/en/currency/us_dollar/city/damascus"
+    );
+
+    const $ = cheerio.load(response.data);
+    let sellPrice = null;
+
+    // البحث عن div يحتوي على النص Sell ثم إيجاد القيمة التي تليه
+    $(".cur-col").each((_, el) => {
+      const label = $(el).find(".label").text().trim();
+      if (label.toLowerCase().includes("sell")) {
+        sellPrice = $(el).find(".value").text().trim();
+      }
+    });
+
+    res.status(200).json({ price: +sellPrice });
   } catch (error) {
     next(error);
   }
@@ -126,7 +143,6 @@ export const addProduct_Es = async (req, res, next) => {
   const weight = req.body.weight;
   const expiryDate = req.body.expiryDate;
   const numberInBox = req.body.numberInBox;
-  
 
   try {
     if (!errors.isEmpty()) {

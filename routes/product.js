@@ -1,7 +1,7 @@
 import express from "express";
 import { body } from "express-validator";
 
-import { deleteProduct,addProduct, updateProduct, searchProduct, searchProduct_Es, addProduct_Es,updateProduct_Es,deleteProduct_Es } from "../controllers/product.js";
+import { deleteProduct,addProduct, updateProduct, searchProduct, searchProduct_Es, addProduct_Es,updateProduct_Es,deleteProduct_Es, getSellPrice } from "../controllers/product.js";
 
 
 const validateAddProduct = [
@@ -41,6 +41,7 @@ router.delete('/delete/:productId',deleteProduct)
 router.post('/add',validateAddProduct,addProduct)
 router.patch('/update/:productId',validateAddProduct,updateProduct)
 router.get('/search',searchProduct)
+router.get('/sellPrice',getSellPrice)
 
 
 
