@@ -28,8 +28,6 @@ const validateAddProduct = [
     .custom((value) => value >= 0)
     .withMessage("Untis per package must be a positive number"),
 
-
-
   body("currency")
     .isIn(["USD", "SYP"])
 

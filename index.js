@@ -28,7 +28,7 @@ app.use(multer({}).array("assets"));
 
 app.use("/product", productRoute);
 app.use((error, req, res, next) => {
-  // console.log(error);
+
 
   const status = error.statusCode || 500;
   const message = error.message || error.error || error || "Something Accurr";

@@ -26,7 +26,10 @@ export const addProduct = async (req, res, next) => {
       error.statusCode = 400;
       throw error;
     }
-    const wholesaleUnitPrice = wholesalePackagePrice / units;
+
+    const wholesaleUnitPrice = parseFloat(
+      (wholesalePackagePrice / untisPerPackage).toFixed(10)
+    );
     const product = {
       productName,
       wholesalePackagePrice,
@@ -38,6 +41,7 @@ export const addProduct = async (req, res, next) => {
 
     const newProduct = new Product(product);
     await newProduct.save();
+
     res.status(200).json({ message: "Product was created" });
   } catch (error) {
     next(error);
@@ -49,7 +53,7 @@ export const updateProduct = async (req, res, next) => {
   const productName = req.body.productName;
   const wholesalePackagePrice = req.body.wholesalePackagePrice;
   const untisPerPackage = req.body.untisPerPackage;
-  const wholesaleUnitPrice = req.body.wholesaleUnitPrice;
+
   const currency = req.body.currency;
 
   try {
@@ -66,14 +70,15 @@ export const updateProduct = async (req, res, next) => {
       error.statusCode = 404;
       throw error;
     }
-
+    const wholesaleUnitPrice = parseFloat(
+      (wholesalePackagePrice / untisPerPackage).toFixed(10)
+    );
     product.productName = productName;
     product.wholesalePackagePrice = wholesalePackagePrice;
     product.untisPerPackage = untisPerPackage;
-    product.wholesaleUnitPrice = wholesaleUnitPrice;
-    product.retailUnitPrice = retailUnitPrice;
     product.latestWholeprice = new Date();
     product.currency = currency;
+    product.wholesaleUnitPrice = wholesaleUnitPrice;
 
     await product.save();
 
