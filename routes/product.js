@@ -28,11 +28,7 @@ const validateAddProduct = [
     .custom((value) => value >= 0)
     .withMessage("Untis per package must be a positive number"),
 
-  body("wholesaleUnitPrice")
-    .isNumeric()
-    .withMessage("wholesale unit price must be a number")
-    .custom((value) => value >= 0)
-    .withMessage("wholesale unit price must be a positive number"),
+
 
   body("currency")
     .isIn(["USD", "SYP"])

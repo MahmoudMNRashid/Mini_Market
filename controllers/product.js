@@ -8,7 +8,6 @@ export const addProduct = async (req, res, next) => {
   const productName = req.body.productName;
   const wholesalePackagePrice = req.body.wholesalePackagePrice;
   const untisPerPackage = req.body.untisPerPackage;
-  const wholesaleUnitPrice = req.body.wholesaleUnitPrice;
   const currency = req.body.currency;
 
   try {
@@ -27,7 +26,7 @@ export const addProduct = async (req, res, next) => {
       error.statusCode = 400;
       throw error;
     }
-
+    const wholesaleUnitPrice = wholesalePackagePrice / units;
     const product = {
       productName,
       wholesalePackagePrice,
