@@ -9,7 +9,7 @@ export const addProduct = async (req, res, next) => {
   const wholesalePackagePrice = req.body.wholesalePackagePrice;
   const untisPerPackage = req.body.untisPerPackage;
   const wholesaleUnitPrice = req.body.wholesaleUnitPrice;
-  const retailUnitPrice = req.body.retailUnitPrice;
+  const currency = req.body.currency;
 
   try {
     if (!errors.isEmpty()) {
@@ -33,7 +33,7 @@ export const addProduct = async (req, res, next) => {
       wholesalePackagePrice,
       untisPerPackage,
       wholesaleUnitPrice,
-      retailUnitPrice,
+      currency,
       latestWholeprice: new Date(),
     };
 

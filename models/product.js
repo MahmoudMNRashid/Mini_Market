@@ -7,7 +7,7 @@ const productSchema = new Schema(
     wholesalePackagePrice: { type: Number, required: true },
     untisPerPackage: { type: Number, required: true },
     wholesaleUnitPrice: { type: Number, required: true },
-    retailUnitPrice: { type: Number, required: true },
+    currency: { type: String, required: true },
     latestWholeprice: { type: Date, required: true },
   },
   { timestamps: true }
