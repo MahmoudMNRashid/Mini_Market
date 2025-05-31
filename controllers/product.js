@@ -51,7 +51,7 @@ export const updateProduct = async (req, res, next) => {
   const wholesalePackagePrice = req.body.wholesalePackagePrice;
   const untisPerPackage = req.body.untisPerPackage;
   const wholesaleUnitPrice = req.body.wholesaleUnitPrice;
-  const retailUnitPrice = req.body.retailUnitPrice;
+  const currency = req.body.currency;
 
   try {
     if (!errors.isEmpty()) {
@@ -74,6 +74,7 @@ export const updateProduct = async (req, res, next) => {
     product.wholesaleUnitPrice = wholesaleUnitPrice;
     product.retailUnitPrice = retailUnitPrice;
     product.latestWholeprice = new Date();
+    product.currency = currency;
 
     await product.save();
 
