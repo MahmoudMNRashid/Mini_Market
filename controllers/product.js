@@ -110,7 +110,7 @@ export const searchProduct = async (req, res, next) => {
   try {
     const products = await Product.find({
       productName: { $regex: new RegExp(searchQuery, "i") },
-    }).limit(40);
+    }).limit(20);
     res.json(products);
   } catch (error) {
     next(error);
