@@ -1,14 +1,13 @@
+import dotenv from "dotenv";
+dotenv.config(); // ← لازم تكون أول شي
+
 import { connect, app } from "./util/connect.js";
 import bodyParser from "body-parser";
 import multer from "multer";
-import dotenv from "dotenv";
 
 import productRoute from "./routes/product.js";
 
-dotenv.config();
-
 connect();
-
 app.get("/test", async (req, res) => {
   res.status(200).json({ message: "hello" });
 });
@@ -28,8 +27,6 @@ app.use(multer({}).array("assets"));
 
 app.use("/product", productRoute);
 app.use((error, req, res, next) => {
-
-
   const status = error.statusCode || 500;
   const message = error.message || error.error || error || "Something Accurr";
   const data = error.data || null;

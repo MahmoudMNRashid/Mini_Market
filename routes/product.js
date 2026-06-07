@@ -11,6 +11,7 @@ import {
   updateProduct_Es,
   deleteProduct_Es,
   getSellPrice,
+  getTobaccoPricePDF,
 } from "../controllers/product.js";
 
 const validateAddProduct = [
@@ -44,6 +45,9 @@ router.delete("/delete/:productId", deleteProduct);
 router.post("/add", validateAddProduct, addProduct);
 router.patch("/update/:productId", validateAddProduct, updateProduct);
 router.get("/search", searchProduct);
+
+router.get("/tobacco-pdf", getTobaccoPricePDF);
+//not used
 router.get("/sellPrice", getSellPrice);
 
 export default router;

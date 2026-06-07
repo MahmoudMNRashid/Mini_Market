@@ -3,6 +3,7 @@ import { validationResult } from "express-validator";
 import { esClient } from "../elasticsearch.js";
 import axios from "axios";
 import * as cheerio from "cheerio";
+import autoTable from "jspdf-autotable";
 export const addProduct = async (req, res, next) => {
   const errors = validationResult(req);
   const productName = req.body.productName;
@@ -115,6 +116,133 @@ export const searchProduct = async (req, res, next) => {
     next(error);
   }
 };
+
+export const getTobaccoPricePDF = async (req, res, next) => {
+  try {
+    // 1. جيب منتجات الدخان
+    const products = await Product.find({
+      productName: { $regex: /دخان|فحم|سيجار|قصدير|معسل/i },
+      currency: "USD",
+    }).lean();
+
+    console.log(products);
+    if (!products.length) {
+      const error = new Error("No tobacco products found");
+      error.statusCode = 404;
+      throw error;
+    }
+
+    // 2. جيب سعر الصرف
+    const rateResponse = await axios.get(
+      "https://api-v2.sp-today.com/api/v1/overview?lang=ar&city=damascus",
+      {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          Referer: "https://www.sp-today.com/",
+          Origin: "https://www.sp-today.com",
+        },
+      }
+    );
+    const rates = rateResponse.data?.data?.rates;
+    if (!Array.isArray(rates)) throw new Error("Rates not found");
+    const usd = rates.find((item) => item.code === "USD");
+    if (!usd) throw new Error("USD not found");
+
+    const exchangeRate = usd.cities?.damascus?.sell;
+    if (exchangeRate == null) throw new Error("Damascus sell price not found");
+
+    // const exchangeRate = 14000;
+    // if (exchangeRate == null) throw new Error("Damascus sell price not found");
+
+    console.log(exchangeRate);
+
+    // 3. ولّد HTML
+    const rows = products
+      .map(
+        (p, i) => `
+      <tr style="background:${i % 2 === 0 ? "#ffffff" : "#e8f0ef"}">
+        <td>${p.productName}</td>
+        <td>$${p.wholesalePackagePrice.toFixed(2)}</td>
+        <td>${(
+          p.wholesalePackagePrice * exchangeRate
+        ).toLocaleString()} ل.س</td>
+        <td>$${p.wholesaleUnitPrice.toFixed(4)}</td>
+        <td>${(p.wholesaleUnitPrice * exchangeRate).toLocaleString()} ل.س</td>
+         <td>${new Date(p.latestWholeprice).toLocaleDateString("ar-SY")}</td>
+      </tr>
+    `
+      )
+      .join("");
+
+    const html = `
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+      <head>
+        <meta charset="UTF-8">
+        <style>
+          body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; padding: 24px; direction: rtl; }
+          h1 { color: #054239; font-size: 20px; margin-bottom: 4px; }
+          .meta { color: #555; font-size: 12px; margin-bottom: 20px; }
+          table { width: 100%; border-collapse: collapse; font-size: 12px; }
+          th { background: #054239; color: white; padding: 10px 8px; text-align: right; }
+          td { padding: 8px; border-bottom: 1px solid #ddd; text-align: right; }
+          .note { margin-top: 16px; font-size: 10px; color: #888; }
+        </style>
+      </head>
+      <body>
+        <h1>قائمة أسعار منتجات الدخان</h1>
+        <div class="meta">
+          سعر الصرف: 1 USD = ${exchangeRate.toLocaleString()} ل.س &nbsp;|&nbsp;
+          التاريخ: ${new Date().toLocaleDateString("ar-SY")}
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>اسم المنتج</th>
+              <th>سعر الجملة (USD)</th>
+              <th>سعر الجملة (ل.س)</th>
+              <th>سعر المفرد (USD)</th>
+              <th>سعر المفرد (ل.س)</th>
+              <th>تاريخ آخر سعر</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <div class="note">* الأسعار بسعر الجملة</div>
+      </body>
+      </html>
+    `;
+
+    // 4. حوّل HTML لـ PDF
+    const puppeteer = await import("puppeteer");
+    const browser = await puppeteer.default.launch({
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: "networkidle0" });
+    const pdfBuffer = await page.pdf({
+      format: "A4",
+      landscape: true,
+      printBackground: true,
+      margin: { top: "16px", bottom: "16px", left: "16px", right: "16px" },
+    });
+    await browser.close();
+
+    // 5. أرسل الـ PDF
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": "attachment; filename=tobacco-prices.pdf",
+      "Content-Length": pdfBuffer.length,
+    });
+
+    res.end(pdfBuffer);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// not used
 export const getSellPrice = async (req, res, next) => {
   try {
     const response = await axios.get(
