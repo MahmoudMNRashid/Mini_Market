@@ -132,29 +132,12 @@ export const getTobaccoPricePDF = async (req, res, next) => {
       throw error;
     }
 
-    // 2. جيب سعر الصرف
-    const rateResponse = await axios.get(
-      "https://api-v2.sp-today.com/api/v1/overview?lang=ar&city=damascus",
-      {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          Referer: "https://www.sp-today.com/",
-          Origin: "https://www.sp-today.com",
-        },
-      }
-    );
-    const rates = rateResponse.data?.data?.rates;
-    if (!Array.isArray(rates)) throw new Error("Rates not found");
-    const usd = rates.find((item) => item.code === "USD");
-    if (!usd) throw new Error("USD not found");
-
-    const exchangeRate = usd.cities?.damascus?.sell;
-    if (exchangeRate == null) throw new Error("Damascus sell price not found");
-
-    // const exchangeRate = 14000;
-    // if (exchangeRate == null) throw new Error("Damascus sell price not found");
-
+const exchangeRate = parseFloat(req.query.rate);
+if (!exchangeRate || isNaN(exchangeRate)) {
+  const error = new Error("Exchange rate is required");
+  error.statusCode = 400;
+  throw error;
+}
    
 
     // 3. ولّد HTML
