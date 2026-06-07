@@ -3,7 +3,7 @@ import { validationResult } from "express-validator";
 import { esClient } from "../elasticsearch.js";
 import axios from "axios";
 import * as cheerio from "cheerio";
-import autoTable from "jspdf-autotable";
+
 export const addProduct = async (req, res, next) => {
   const errors = validationResult(req);
   const productName = req.body.productName;
