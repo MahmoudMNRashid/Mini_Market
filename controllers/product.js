@@ -125,20 +125,18 @@ export const getTobaccoPricePDF = async (req, res, next) => {
       currency: "USD",
     }).lean();
 
-   
     if (!products.length) {
       const error = new Error("No tobacco products found");
       error.statusCode = 404;
       throw error;
     }
 
-const exchangeRate = parseFloat(req.query.rate);
-if (!exchangeRate || isNaN(exchangeRate)) {
-  const error = new Error("Exchange rate is required");
-  error.statusCode = 400;
-  throw error;
-}
-   
+    const exchangeRate = parseFloat(req.query.rate);
+    if (!exchangeRate || isNaN(exchangeRate)) {
+      const error = new Error("Exchange rate is required");
+      error.statusCode = 400;
+      throw error;
+    }
 
     // 3. ولّد HTML
     const rows = products
@@ -198,10 +196,24 @@ if (!exchangeRate || isNaN(exchangeRate)) {
     `;
 
     // 4. حوّل HTML لـ PDF
-    const puppeteer = await import("puppeteer");
-    const browser = await puppeteer.default.launch({
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
+
+    let browser;
+
+    if (process.env.NODE_ENV === "production") {
+      const chromium = (await import("@sparticuz/chromium")).default;
+      const puppeteer = (await import("puppeteer-core")).default;
+      browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+      });
+    } else {
+      const puppeteer = (await import("puppeteer")).default;
+      browser = await puppeteer.launch({
+        args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      });
+    }
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: "networkidle0" });
     const pdfBuffer = await page.pdf({
