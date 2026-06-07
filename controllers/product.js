@@ -125,7 +125,7 @@ export const getTobaccoPricePDF = async (req, res, next) => {
       currency: "USD",
     }).lean();
 
-    console.log(products);
+   
     if (!products.length) {
       const error = new Error("No tobacco products found");
       error.statusCode = 404;
@@ -155,7 +155,7 @@ export const getTobaccoPricePDF = async (req, res, next) => {
     // const exchangeRate = 14000;
     // if (exchangeRate == null) throw new Error("Damascus sell price not found");
 
-    console.log(exchangeRate);
+   
 
     // 3. ولّد HTML
     const rows = products
