@@ -107,13 +107,29 @@ export const deleteProduct = async (req, res, next) => {
   }
 };
 export const searchProduct = async (req, res, next) => {
-  const searchQuery = req.query.name;
-
+  const { name = "", page = 1, limit = 40 } = req.query;
+  const pageNum = parseInt(page);
+  const limitNum = parseInt(limit);
+  const skip = (pageNum - 1) * limitNum;
   try {
-    const products = await Product.find({
-      productName: { $regex: new RegExp(searchQuery, "i") },
-    }).limit(20);
-    res.json(products);
+    const [products, total] = await Promise.all([
+      Product.find({
+        productName: { $regex: new RegExp(name.trim(), "i") },
+      })
+        .skip(skip)
+        .limit(limitNum),
+      Product.countDocuments({
+        productName: { $regex: new RegExp(name.trim(), "i") },
+      }),
+    ]);
+
+    res.json({
+      products,
+      total,
+      page: pageNum,
+      totalPages: Math.ceil(total / limitNum),
+      hasMore: pageNum * limitNum < total,
+    });
   } catch (error) {
     next(error);
   }
