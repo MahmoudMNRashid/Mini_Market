@@ -163,7 +163,7 @@ export const getTobaccoPricePDF = async (req, res, next) => {
   <meta charset="UTF-8">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600&display=swap" rel="stylesheet">
   <style>
-    body {  font-family: Arial, sans-serif;; padding: 24px; direction: rtl; }
+    body { padding: 24px; direction: rtl; }
     h1 { color: #054239; font-size: 20px; margin-bottom: 4px; }
     .meta { color: #555; font-size: 12px; margin-bottom: 20px; }
     table { width: 100%; border-collapse: collapse; font-size: 12px; }
