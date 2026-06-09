@@ -3,7 +3,9 @@ import { validationResult } from "express-validator";
 import { esClient } from "../elasticsearch.js";
 import axios from "axios";
 import * as cheerio from "cheerio";
-
+import { readFileSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 export const addProduct = async (req, res, next) => {
   const errors = validationResult(req);
   const productName = req.body.productName;
@@ -137,7 +139,8 @@ export const getTobaccoPricePDF = async (req, res, next) => {
       error.statusCode = 400;
       throw error;
     }
-
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const fontBase64 = readFileSync(join(__dirname, "../Cairo-Regular.ttf")).toString("base64")
     // 3. ولّد HTML
     const rows = products
       .map(
@@ -163,7 +166,11 @@ export const getTobaccoPricePDF = async (req, res, next) => {
   <meta charset="UTF-8">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600&display=swap" rel="stylesheet">
   <style>
-    body { padding: 24px; direction: rtl; }
+  @font-face {
+    font-family: 'Cairo';
+    src: url('data:font/truetype;base64,${fontBase64}') format('truetype');
+  }
+  body { font-family: 'Cairo', sans-serif; padding: 24px; direction: rtl; }
     h1 { color: #054239; font-size: 20px; margin-bottom: 4px; }
     .meta { color: #555; font-size: 12px; margin-bottom: 20px; }
     table { width: 100%; border-collapse: collapse; font-size: 12px; }
