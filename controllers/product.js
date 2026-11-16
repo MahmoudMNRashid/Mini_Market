@@ -105,13 +105,29 @@ export const deleteProduct = async (req, res, next) => {
   }
 };
 export const searchProduct = async (req, res, next) => {
-  const searchQuery = req.query.name;
-
+  const { name = "", page = 1, limit = 40 } = req.query;
+  const pageNum = parseInt(page);
+  const limitNum = parseInt(limit);
+  const skip = (pageNum - 1) * limitNum;
   try {
-    const products = await Product.find({
-      productName: { $regex: new RegExp(searchQuery, "i") },
-    }).limit(40);
-    res.json(products);
+    const [products, total] = await Promise.all([
+      Product.find({
+        productName: { $regex: new RegExp(name.trim(), "i") },
+      })
+        .skip(skip)
+        .limit(limitNum),
+      Product.countDocuments({
+        productName: { $regex: new RegExp(name.trim(), "i") },
+      }),
+    ]);
+
+    res.json({
+      products,
+      total,
+      page: pageNum,
+      totalPages: Math.ceil(total / limitNum),
+      hasMore: pageNum * limitNum < total,
+    });
   } catch (error) {
     next(error);
   }
@@ -150,7 +166,7 @@ export const getTobaccoPricePDF = async (req, res, next) => {
         ).toLocaleString()} ل.س</td>
         <td>$${p.wholesaleUnitPrice.toFixed(4)}</td>
         <td>${(p.wholesaleUnitPrice * exchangeRate).toLocaleString()} ل.س</td>
-         <td>${new Date(p.latestWholeprice).toLocaleDateString("ar-SY")}</td>
+         <td>${new Date(p.latestWholeprice).toLocaleDateString("en-US")}</td>
       </tr>
     `
       )
@@ -160,17 +176,18 @@ export const getTobaccoPricePDF = async (req, res, next) => {
       <!DOCTYPE html>
       <html dir="rtl" lang="ar">
       <head>
-        <meta charset="UTF-8">
-        <style>
-          body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; padding: 24px; direction: rtl; }
-          h1 { color: #054239; font-size: 20px; margin-bottom: 4px; }
-          .meta { color: #555; font-size: 12px; margin-bottom: 20px; }
-          table { width: 100%; border-collapse: collapse; font-size: 12px; }
-          th { background: #054239; color: white; padding: 10px 8px; text-align: right; }
-          td { padding: 8px; border-bottom: 1px solid #ddd; text-align: right; }
-          .note { margin-top: 16px; font-size: 10px; color: #888; }
-        </style>
-      </head>
+  <meta charset="UTF-8">
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body {  font-family: Arial, sans-serif;; padding: 24px; direction: rtl; }
+    h1 { color: #054239; font-size: 20px; margin-bottom: 4px; }
+    .meta { color: #555; font-size: 12px; margin-bottom: 20px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { background: #054239; color: white; padding: 10px 8px; text-align: right; }
+    td { padding: 8px; border-bottom: 1px solid #ddd; text-align: right; }
+    .note { margin-top: 16px; font-size: 10px; color: #888; }
+  </style>
+</head>
       <body>
         <h1>قائمة أسعار منتجات الدخان</h1>
         <div class="meta">
@@ -194,7 +211,7 @@ export const getTobaccoPricePDF = async (req, res, next) => {
       </body>
       </html>
     `;
-
+    console.log(html);
     // 4. حوّل HTML لـ PDF
 
     let browser;
@@ -216,6 +233,7 @@ export const getTobaccoPricePDF = async (req, res, next) => {
     }
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: "networkidle0" });
+    await page.evaluateHandle("document.fonts.ready");
     const pdfBuffer = await page.pdf({
       format: "A4",
       landscape: true,

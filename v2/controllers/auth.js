@@ -1,0 +1,131 @@
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import User from "../models/user.js";
+import { generateActivationCode } from "../utils/generateCode.js";
+
+export const loginOrRegister = async (req, res, next) => {
+  const { phoneNumber, password } = req.body;
+
+  try {
+    if (!phoneNumber || !password) {
+      const error = new Error("رقم الهاتف وكلمة المرور مطلوبين");
+      error.statusCode = 422;
+      throw error;
+    }
+
+    let user = await User.findOne({ phoneNumber });
+
+    // ── المستخدم غير موجود → أنشئ حساب جديد ──────────────────────────────
+    if (!user) {
+      const hashedPassword = await bcrypt.hash(password, 12);
+      const activationCode = generateActivationCode();
+
+      user = new User({
+        phoneNumber,
+        password: hashedPassword,
+        activationCode,
+        subscriptionEnd: null,
+      });
+
+      await user.save();
+
+      return res.status(201).json({
+        message: "تم إنشاء الحساب، تواصل معنا لتفعيل الاشتراك",
+        requiresActivation: true,
+        isNewAccount: true,
+      });
+    }
+
+    // ── المستخدم موجود → تحقق من كلمة المرور ─────────────────────────────
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      const error = new Error("رقم الهاتف أو كلمة المرور غير صحيحة");
+      error.statusCode = 401;
+      throw error;
+    }
+
+    const isActive = user.subscriptionEnd && user.subscriptionEnd > new Date();
+
+    // ── الاشتراك غير نشط ──────────────────────────────────────────────────
+    if (!isActive) {
+      // لو كان نشط سابقاً وانتهى الآن → احرق الكود
+      if (
+        user.subscriptionEnd &&
+        user.subscriptionEnd <= new Date() &&
+        user.activationCode
+      ) {
+        user.activationCode = null;
+        await user.save();
+      }
+
+      return res.status(403).json({
+        message: "اشتراكك غير مفعل، يرجى التواصل معنا",
+        requiresActivation: true,
+        isNewAccount: false,
+      });
+    }
+
+    // ── الاشتراك نشط → أصدر توكن ──────────────────────────────────────────
+    const token = jwt.sign(
+      { userId: user._id.toString() },
+      process.env.JWT_SECRET,
+      { expiresIn: "30d" }
+    );
+
+    res.status(200).json({
+      message: "تم تسجيل الدخول",
+      token,
+      subscriptionEnd: user.subscriptionEnd,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ── تفعيل الحساب بالكود (بعد التسجيل أو بعد انتهاء الاشتراك) ─────────────
+export const activate = async (req, res, next) => {
+  const { phoneNumber, code } = req.body;
+
+  try {
+    if (!phoneNumber || !code) {
+      const error = new Error("رقم الهاتف والكود مطلوبين");
+      error.statusCode = 422;
+      throw error;
+    }
+
+    const user = await User.findOne({ phoneNumber });
+    if (!user) {
+      const error = new Error("المستخدم غير موجود");
+      error.statusCode = 404;
+      throw error;
+    }
+
+    if (!user.activationCode || user.activationCode !== code) {
+      const error = new Error("الكود غير صحيح");
+      error.statusCode = 401;
+      throw error;
+    }
+
+    const isActive = user.subscriptionEnd && user.subscriptionEnd > new Date();
+    if (!isActive) {
+      const error = new Error("اشتراكك غير مفعل بعد، يرجى التواصل معنا");
+      error.statusCode = 403;
+      throw error;
+    }
+
+    const token = jwt.sign(
+      { userId: user._id.toString() },
+      process.env.JWT_SECRET,
+      { expiresIn: "30d" }
+    );
+
+    res.status(200).json({
+      message: "تم التفعيل بنجاح",
+      token,
+      subscriptionEnd: user.subscriptionEnd,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
