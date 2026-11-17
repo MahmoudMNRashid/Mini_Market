@@ -48,13 +48,14 @@ export const loginOrRegister = async (req, res, next) => {
 
     // ── الاشتراك غير نشط ──────────────────────────────────────────────────
     if (!isActive) {
-      // لو كان نشط سابقاً وانتهى الآن → احرق الكود
+      // لو كان نشط سابقاً وانتهى الآن → احرق الكود وألغِ التحقق
       if (
         user.subscriptionEnd &&
         user.subscriptionEnd <= new Date() &&
-        user.activationCode
+        (user.activationCode || user.isVerified)
       ) {
         user.activationCode = null;
+        user.isVerified = false;
         await user.save();
       }
 
@@ -65,7 +66,17 @@ export const loginOrRegister = async (req, res, next) => {
       });
     }
 
-    // ── الاشتراك نشط → أصدر توكن ──────────────────────────────────────────
+    // ── الاشتراك نشط بس لسا ما دخل الكود → لازم يفعّل ──────────────────────
+    if (!user.isVerified) {
+      return res.status(403).json({
+        message: "أدخل كود التفعيل اللي وصلك على WhatsApp",
+        requiresActivation: true,
+        requiresCode: true,
+        isNewAccount: false,
+      });
+    }
+
+    // ── الاشتراك نشط ومتحقق → أصدر توكن ───────────────────────────────────
     const token = jwt.sign(
       { userId: user._id.toString() },
       process.env.JWT_SECRET,
@@ -84,11 +95,11 @@ export const loginOrRegister = async (req, res, next) => {
 
 // ── تفعيل الحساب بالكود (بعد التسجيل أو بعد انتهاء الاشتراك) ─────────────
 export const activate = async (req, res, next) => {
-  const { phoneNumber, code } = req.body;
+  const { phoneNumber, password, code } = req.body;
 
   try {
-    if (!phoneNumber || !code) {
-      const error = new Error("رقم الهاتف والكود مطلوبين");
+    if (!phoneNumber || !password || !code) {
+      const error = new Error("رقم الهاتف وكلمة المرور والكود مطلوبين");
       error.statusCode = 422;
       throw error;
     }
@@ -97,6 +108,14 @@ export const activate = async (req, res, next) => {
     if (!user) {
       const error = new Error("المستخدم غير موجود");
       error.statusCode = 404;
+      throw error;
+    }
+
+    // بدون كلمة المرور، أي حدا بيعرف رقم مشترك فعّال بيقدر يجرب الأكواد لحد ما يطلع معه توكن
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      const error = new Error("رقم الهاتف أو كلمة المرور غير صحيحة");
+      error.statusCode = 401;
       throw error;
     }
 
@@ -111,6 +130,11 @@ export const activate = async (req, res, next) => {
       const error = new Error("اشتراكك غير مفعل بعد، يرجى التواصل معنا");
       error.statusCode = 403;
       throw error;
+    }
+
+    if (!user.isVerified) {
+      user.isVerified = true;
+      await user.save();
     }
 
     const token = jwt.sign(
@@ -129,3 +153,11 @@ export const activate = async (req, res, next) => {
   }
 };
 
+
+// ── بيانات المستخدم الحالي (محمي بـ checkSubscription) ─────────────────────
+export const getMe = (req, res) => {
+  res.status(200).json({
+    phoneNumber: req.user.phoneNumber,
+    subscriptionEnd: req.user.subscriptionEnd,
+  });
+};

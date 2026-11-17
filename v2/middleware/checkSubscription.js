@@ -30,9 +30,10 @@ export const checkSubscription = async (req, res, next) => {
     const isActive = user.subscriptionEnd && user.subscriptionEnd > new Date();
 
     if (!isActive) {
-      // احرق الكود لحظة اكتشاف الانتهاء
-      if (user.activationCode) {
+      // احرق الكود وألغِ التحقق لحظة اكتشاف الانتهاء
+      if (user.activationCode || user.isVerified) {
         user.activationCode = null;
+        user.isVerified = false;
         await user.save();
       }
 
@@ -42,6 +43,7 @@ export const checkSubscription = async (req, res, next) => {
     }
 
     req.userId = user._id.toString();
+    req.user = user; // مشان ما نرجع نجيبه من الـ DB بالـ controller
     next();
   } catch (error) {
     next(error);

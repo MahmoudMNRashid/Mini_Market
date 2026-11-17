@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PricePal Test Panel</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #fff; --text: #1d2330; --muted: #6b7280; --border: #e3e5ea;
+    --primary: #2563eb; --primary-text: #fff; --ok: #15803d; --warn: #b45309; --err: #b91c1c;
+    --code-bg: #0f172a; --code-text: #e2e8f0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1115; --card: #181b22; --text: #e6e8ec; --muted: #9aa1ad; --border: #2a2f3a;
+      --primary: #3b82f6; --ok: #4ade80; --warn: #fbbf24; --err: #f87171; --code-bg: #0a0c10; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, "Segoe UI", Tahoma, sans-serif; background: var(--bg); color: var(--text); }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 0 0 12px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+  .card h2 { font-size: 15px; margin: 0 0 10px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; }
+  label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); flex: 1; min-width: 160px; }
+  input, select { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 14px; }
+  button { padding: 9px 14px; border: 0; border-radius: 8px; background: var(--primary); color: var(--primary-text); font-size: 14px; cursor: pointer; }
+  button.secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  button.small { padding: 5px 9px; font-size: 12px; }
+  button:disabled { opacity: .5; cursor: default; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+  .tabs button { background: var(--card); color: var(--text); border: 1px solid var(--border); }
+  .tabs button.active { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
+  .hidden { display: none !important; }
+  .status { font-size: 13px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); margin-top: 10px; }
+  .status.ok { color: var(--ok); } .status.warn { color: var(--warn); } .status.err { color: var(--err); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 8px 6px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; }
+  .table-scroll { overflow-x: auto; }
+  .badge { padding: 2px 8px; border-radius: 99px; font-size: 12px; border: 1px solid currentColor; }
+  .badge.ok { color: var(--ok); } .badge.err { color: var(--err); } .badge.warn { color: var(--warn); }
+  pre { background: var(--code-bg); color: var(--code-text); padding: 12px; border-radius: 8px; font-size: 12px;
+        overflow: auto; max-height: 320px; direction: ltr; text-align: left; margin: 0; }
+  .log-entry { margin-bottom: 10px; }
+  .log-head { font-size: 12px; color: var(--muted); margin-bottom: 4px; direction: ltr; text-align: left; }
+  .mono { font-family: ui-monospace, Consolas, monospace; direction: ltr; unicode-bidi: embed; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>PricePal · لوحة تجربة API v2</h1>
+
+  <div class="card">
+    <h2>الإعدادات</h2>
+    <div class="row">
+      <label>Base URL <input id="baseUrl" class="mono" placeholder="http://localhost:3000"></label>
+      <label>Admin Key <input id="adminKey" type="password" class="mono" placeholder="ADMIN_KEY من .env"></label>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button data-tab="user" class="active">👤 User</button>
+    <button data-tab="admin">🛠️ Admin</button>
+  </div>
+
+  <!-- ─────────────── USER TAB ─────────────── -->
+  <section id="tab-user">
+    <div class="card">
+      <h2>1. تسجيل دخول / إنشاء حساب</h2>
+      <div class="row">
+        <label>رقم الهاتف <input id="uPhone" class="mono" placeholder="09xxxxxxxx"></label>
+        <label>كلمة المرور <input id="uPass" type="password"></label>
+        <button id="btnLogin">Login</button>
+      </div>
+    </div>
+
+    <div class="card" id="codeCard">
+      <h2>2. إدخال كود التفعيل</h2>
+      <div class="row">
+        <label>الكود <input id="uCode" class="mono" maxlength="6" placeholder="6 أرقام"></label>
+        <button id="btnActivate">Activate</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>3. الجلسة</h2>
+      <div class="row">
+        <label>Token <input id="uToken" class="mono" readonly placeholder="ما في token"></label>
+        <button id="btnMe">GET /me</button>
+        <button id="btnLogout" class="secondary">Logout</button>
+      </div>
+      <div id="userState" class="status">مش مسجّل دخول</div>
+    </div>
+  </section>
+
+  <!-- ─────────────── ADMIN TAB ─────────────── -->
+  <section id="tab-admin" class="hidden">
+    <div class="card">
+      <h2>تفعيل / تجديد اشتراك</h2>
+      <div class="row">
+        <label>رقم الهاتف <input id="aPhone" class="mono"></label>
+        <label>عدد الأشهر
+          <select id="aMonths">
+            <option value="1">1</option><option value="3">3</option>
+            <option value="6">6</option><option value="12">12</option>
+          </select>
+        </label>
+        <button id="btnAdminActivate">Activate subscription</button>
+        <button id="btnAdminTrial" class="secondary">Trial (7 أيام)</button>
+      </div>
+      <div id="adminResult" class="status hidden"></div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <h2 style="margin:0">المستخدمين</h2>
+        <button id="btnUsers" class="small">تحديث</button>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>الرقم</th><th>الحالة</th><th>متحقق</th><th>الكود</th><th>ينتهي</th><th>تاريخ التسجيل</th><th></th></tr></thead>
+          <tbody id="usersBody"><tr><td colspan="7" style="color:var(--muted)">اضغط تحديث</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────── LOG ─────────────── -->
+  <div class="card">
+    <div class="row" style="justify-content: space-between; align-items: center; margin-bottom: 8px;">
+      <h2 style="margin:0">Log</h2>
+      <button id="btnClearLog" class="small secondary">مسح</button>
+    </div>
+    <div id="log"></div>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const store = {
+    get(k, d = "") { try { return localStorage.getItem("pp_" + k) ?? d; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem("pp_" + k, v); } catch {} },
+    del(k) { try { localStorage.removeItem("pp_" + k); } catch {} },
+  };
+
+  // ── settings ──
+  $("baseUrl").value = store.get("baseUrl", "http://localhost:3000");
+  $("adminKey").value = store.get("adminKey");
+  $("uPhone").value = store.get("phone");
+  $("uToken").value = store.get("token");
+  $("baseUrl").oninput = (e) => store.set("baseUrl", e.target.value.trim());
+  $("adminKey").oninput = (e) => store.set("adminKey", e.target.value);
+  $("uPhone").oninput = (e) => store.set("phone", e.target.value.trim());
+
+  // ── tabs ──
+  document.querySelectorAll(".tabs button").forEach((b) => {
+    b.onclick = () => {
+      document.querySelectorAll(".tabs button").forEach((x) => x.classList.toggle("active", x === b));
+      $("tab-user").classList.toggle("hidden", b.dataset.tab !== "user");
+      $("tab-admin").classList.toggle("hidden", b.dataset.tab !== "admin");
+      store.set("tab", b.dataset.tab);
+      if (b.dataset.tab === "admin") loadUsers();
+    };
+  });
+  if (store.get("tab") === "admin") document.querySelector('[data-tab="admin"]').click();
+
+  // ── api ──
+  async function api(method, path, { body, token, admin } = {}) {
+    const headers = { "Content-Type": "application/json" };
+    if (token) headers.Authorization = "Bearer " + token;
+    if (admin) headers["x-admin-key"] = $("adminKey").value;
+    const url = $("baseUrl").value.replace(/\/$/, "") + "/api/v2" + path;
+    let status = 0, data = null;
+    try {
+      const r = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined });
+      status = r.status;
+      data = await r.json().catch(() => null);
+    } catch (e) {
+      data = { error: "Network error: " + e.message + " (السيرفر شغال؟ الـ Base URL صح؟)" };
+    }
+    log(method, path, body, status, data);
+    return { status, data };
+  }
+
+  function log(method, path, body, status, data) {
+    const el = document.createElement("div");
+    el.className = "log-entry";
+    const color = status >= 200 && status < 300 ? "var(--ok)" : status === 0 ? "var(--err)" : status < 500 ? "var(--warn)" : "var(--err)";
+    const safeBody = body && body.password ? { ...body, password: "••••" } : body;
+    el.innerHTML = `<div class="log-head">${new Date().toLocaleTimeString()} · <b>${method} ${path}</b> · <span style="color:${color}">${status || "ERR"}</span></div><pre></pre>`;
+    el.querySelector("pre").textContent = (safeBody ? "→ " + JSON.stringify(safeBody) + "\n\n" : "") + "← " + JSON.stringify(data, null, 2);
+    $("log").prepend(el);
+  }
+  $("btnClearLog").onclick = () => ($("log").innerHTML = "");
+
+  function setStatus(el, text, kind) {
+    el.textContent = text;
+    el.className = "status " + (kind || "");
+  }
+
+  // ── user flow ──
+  function setToken(t) {
+    $("uToken").value = t || "";
+    t ? store.set("token", t) : store.del("token");
+  }
+
+  $("btnLogin").onclick = async () => {
+    const { status, data } = await api("POST", "/auth/login", {
+      body: { phoneNumber: $("uPhone").value.trim(), password: $("uPass").value },
+    });
+    if (status === 200) {
+      setToken(data.token);
+      setStatus($("userState"), "✅ جوا. الاشتراك ينتهي: " + fmt(data.subscriptionEnd), "ok");
+    } else if (status === 201) {
+      setStatus($("userState"), "🆕 انعمل الحساب. لازم الأدمن يفعّل الاشتراك ويبعت الكود", "warn");
+    } else if (status === 403 && data?.requiresCode) {
+      setStatus($("userState"), "🔑 الاشتراك فعّال، دخّل الكود اللي وصلك (خطوة 2)", "warn");
+      $("uCode").focus();
+    } else if (status === 403) {
+      setStatus($("userState"), "⛔ " + (data?.message || "الاشتراك غير مفعل"), "err");
+    } else {
+      setStatus($("userState"), "❌ " + (data?.message || data?.error || "خطأ"), "err");
+    }
+  };
+
+  $("btnActivate").onclick = async () => {
+    const { status, data } = await api("POST", "/auth/activate", {
+      body: { phoneNumber: $("uPhone").value.trim(), password: $("uPass").value, code: $("uCode").value.trim() },
+    });
+    if (status === 200) {
+      setToken(data.token);
+      setStatus($("userState"), "✅ تم التفعيل، صار جوا. ينتهي: " + fmt(data.subscriptionEnd), "ok");
+    } else {
+      setStatus($("userState"), "❌ " + (data?.message || "خطأ"), "err");
+    }
+  };
+
+  $("btnMe").onclick = async () => {
+    const { status, data } = await api("GET", "/auth/me", { token: $("uToken").value });
+    if (status === 200) setStatus($("userState"), "✅ الجلسة شغالة · " + data.phoneNumber + " · ينتهي " + fmt(data.subscriptionEnd), "ok");
+    else if (status === 403) { setToken(null); setStatus($("userState"), "⛔ الاشتراك خلص، التطبيق رح يعمل logout", "err"); }
+    else { setToken(null); setStatus($("userState"), "❌ " + (data?.message || "خطأ"), "err"); }
+  };
+
+  $("btnLogout").onclick = () => { setToken(null); setStatus($("userState"), "مش مسجّل دخول", ""); };
+
+  // ── admin flow ──
+  async function adminAction(path, body) {
+    const { status, data } = await api("POST", path, { body, admin: true });
+    const el = $("adminResult");
+    el.classList.remove("hidden");
+    if (status === 200) {
+      setStatus(el, `✅ ${data.message} · الكود: ${data.activationCode} · ينتهي: ${fmt(data.subscriptionEnd)}`, "ok");
+      loadUsers();
+    } else {
+      setStatus(el, "❌ " + (data?.message || "خطأ"), "err");
+    }
+  }
+  $("btnAdminActivate").onclick = () =>
+    adminAction("/admin/activate-subscription", { phoneNumber: $("aPhone").value.trim(), months: Number($("aMonths").value) });
+  $("btnAdminTrial").onclick = () => {
+    if (confirm("الـ trial بيكتب فوق تاريخ الانتهاء الحالي. متأكد؟"))
+      adminAction("/admin/grant-trial", { phoneNumber: $("aPhone").value.trim() });
+  };
+
+  async function loadUsers() {
+    const { status, data } = await api("GET", "/admin/users", { admin: true });
+    const tbody = $("usersBody");
+    if (status !== 200) {
+      tbody.innerHTML = `<tr><td colspan="7" style="color:var(--err)"></td></tr>`;
+      tbody.querySelector("td").textContent = data?.message || data?.error || "خطأ";
+      return;
+    }
+    if (!data.users.length) { tbody.innerHTML = `<tr><td colspan="7" style="color:var(--muted)">ما في مستخدمين</td></tr>`; return; }
+    tbody.innerHTML = "";
+    const now = new Date();
+    for (const u of data.users) {
+      const end = u.subscriptionEnd ? new Date(u.subscriptionEnd) : null;
+      const state = !end ? ["جديد", "warn"] : end > now ? ["فعّال", "ok"] : ["منتهي", "err"];
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td class="mono"></td>
+        <td><span class="badge ${state[1]}">${state[0]}</span></td>
+        <td>${u.isVerified ? "✅" : "—"}</td>
+        <td class="mono">${u.activationCode ?? "🔥"}</td>
+        <td>${fmt(u.subscriptionEnd)}</td>
+        <td>${fmt(u.createdAt)}</td>
+        <td><button class="small secondary">اختر</button></td>`;
+      tr.querySelector("td").textContent = u.phoneNumber;
+      tr.querySelector("button").onclick = () => { $("aPhone").value = u.phoneNumber; $("aPhone").scrollIntoView({ behavior: "smooth", block: "center" }); };
+      tbody.appendChild(tr);
+    }
+  }
+  $("btnUsers").onclick = loadUsers;
+
+  function fmt(d) {
+    if (!d) return "—";
+    return new Date(d).toLocaleString("en-GB", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+  }
+</script>
+</body>
+</html>

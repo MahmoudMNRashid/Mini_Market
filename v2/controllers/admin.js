@@ -94,7 +94,7 @@ export const grantTrial = async (req, res, next) => {
 export const getAllUsers = async (req, res, next) => {
   try {
     const users = await User.find()
-      .select("phoneNumber activationCode subscriptionEnd createdAt")
+      .select("phoneNumber activationCode subscriptionEnd isVerified createdAt")
       .sort({ createdAt: -1 })
       .lean();
 

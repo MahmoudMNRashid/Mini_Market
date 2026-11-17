@@ -7,6 +7,8 @@ const userSchema = new Schema(
     password: { type: String, required: true },
     activationCode: { type: String, default: null },
     subscriptionEnd: { type: Date, default: null },
+    // true بعد ما يدخل الكود مرة وحدة بفترة الاشتراك الحالية، بيرجع false عند الانتهاء
+    isVerified: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

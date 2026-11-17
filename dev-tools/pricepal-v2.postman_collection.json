@@ -1,0 +1,216 @@
+{
+  "info": {
+    "name": "PricePal API v2",
+    "description": "Auth + subscription flow.\n\nSet collection variables first: baseUrl, adminKey, phoneNumber, password.\n\nOrder: Auth/Login (register) → Admin/Activate Subscription (saves code) → Auth/Login (403 requiresCode) → Auth/Activate (saves token) → Auth/Me.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "adminKey", "value": "" },
+    { "key": "phoneNumber", "value": "0999999999" },
+    { "key": "password", "value": "secret123" },
+    { "key": "months", "value": "1" },
+    { "key": "code", "value": "" },
+    { "key": "token", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login / Register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (pm.response.code === 200 && body.token) {",
+                  "  pm.collectionVariables.set('token', body.token);",
+                  "}",
+                  "pm.test('activationCode is never returned', () => {",
+                  "  pm.expect(body).to.not.have.property('activationCode');",
+                  "});",
+                  "pm.test('expected status (200 / 201 / 403)', () => {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 403]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"{{phoneNumber}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v2/auth/login",
+            "description": "201 = new account created (requiresActivation)\n403 + requiresCode = subscription active, enter code\n403 without requiresCode = subscription not active\n200 = token"
+          }
+        },
+        {
+          "name": "Activate (code)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (pm.response.code === 200 && body.token) {",
+                  "  pm.collectionVariables.set('token', body.token);",
+                  "}",
+                  "pm.test('status 200 + token', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(body.token).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"{{phoneNumber}}\",\n  \"password\": \"{{password}}\",\n  \"code\": \"{{code}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v2/auth/activate"
+          }
+        },
+        {
+          "name": "Me (protected)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+            },
+            "url": "{{baseUrl}}/api/v2/auth/me",
+            "description": "401 = missing/invalid token, 403 = subscription expired (app should log out)"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Users list",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "x-admin-key", "value": "{{adminKey}}" }],
+            "url": "{{baseUrl}}/api/v2/admin/users"
+          }
+        },
+        {
+          "name": "Activate Subscription",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (pm.response.code === 200 && body.activationCode) {",
+                  "  pm.collectionVariables.set('code', body.activationCode);",
+                  "}",
+                  "pm.test('status 200 + code', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(body.activationCode).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-admin-key", "value": "{{adminKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"{{phoneNumber}}\",\n  \"months\": {{months}}\n}"
+            },
+            "url": "{{baseUrl}}/api/v2/admin/activate-subscription",
+            "description": "Saves activationCode into the {{code}} collection variable."
+          }
+        },
+        {
+          "name": "Grant Trial (7 days)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (pm.response.code === 200 && body.activationCode) {",
+                  "  pm.collectionVariables.set('code', body.activationCode);",
+                  "}",
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-admin-key", "value": "{{adminKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"{{phoneNumber}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v2/admin/grant-trial",
+            "description": "Warning: overwrites current subscriptionEnd (can shorten a paid subscription)."
+          }
+        },
+        {
+          "name": "Users list — no key (expect 401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('admin is protected (401)', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v2/admin/users"
+          }
+        }
+      ]
+    }
+  ]
+}
