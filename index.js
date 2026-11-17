@@ -10,6 +10,7 @@ import authRouteV2 from "./v2/routes/auth.js";
 import adminRouteV2 from "./v2/routes/admin.js";
 import categoryRouteV2 from "./v2/routes/category.js";
 import productRouteV2 from "./v2/routes/product.js";
+import priceListRouteV2 from "./v2/routes/priceList.js";
 connect();
 app.get("/test", async (req, res) => {
   res.status(200).json({ message: "hello" });
@@ -33,6 +34,7 @@ app.use("/api/v2/auth", authRouteV2);
 app.use("/api/v2/admin", adminRouteV2);
 app.use("/api/v2/categories", categoryRouteV2);
 app.use("/api/v2/products", productRouteV2);
+app.use("/api/v2/price-list", priceListRouteV2);
 app.use("/product", productRoute);
 app.use((error, req, res, next) => {
   const status = error.statusCode || 500;

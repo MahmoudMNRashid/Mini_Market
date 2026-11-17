@@ -140,6 +140,22 @@
         <button id="btnNext" class="small secondary">التالي ←</button>
       </div>
     </div>
+
+    <div class="card">
+      <h2>قائمة أسعار</h2>
+      <div class="row">
+        <label>الفئة <select id="plCategory"></select></label>
+        <label style="min-width:130px">سعر الدولار <input id="plRate" type="number" min="0" class="mono" placeholder="13500"></label>
+        <label style="min-width:150px">النوع
+          <select id="plType"><option value="wholesale">جملة (لصاحب المحل)</option><option value="retail">مبيع (للزبائن)</option></select>
+        </label>
+        <label style="min-width:100px">الربح % <input id="plMargin" type="number" min="0" step="any" class="mono" placeholder="12.5"></label>
+        <button id="btnPlShow">عرض</button>
+        <button id="btnPlPrint" class="secondary">🖨️ طباعة / PDF</button>
+      </div>
+      <!-- معاينة متل شاشة الجوال -->
+      <div id="plPreview" style="max-width:420px; margin-top:14px"></div>
+    </div>
   </section>
 
   <!-- ─────────────── ADMIN TAB ─────────────── -->
@@ -375,7 +391,8 @@
     return opts;
   }
   function refreshSelects() {
-    const keep = { cp: $("catParent").value, pc: $("pCategory").value, fc: $("fCategory").value };
+    const keep = { cp: $("catParent").value, pc: $("pCategory").value, fc: $("fCategory").value, pl: $("plCategory").value };
+    fillSelect($("plCategory"), [["", "— اختار فئة —"], ...catOptions()], keep.pl);
     fillSelect($("catParent"), [["", "— بدون (فئة أب) —"], ...catOptions({ parentsOnly: true, excludeId: editingCatId })], keep.cp);
     fillSelect($("pCategory"), [["", "— بدون فئة —"], ...catOptions()], keep.pc);
     fillSelect($("fCategory"), [["", "الكل"], ["none", "بدون فئة"], ...catOptions()], keep.fc);
@@ -552,6 +569,71 @@
     if (status === 200) { loadProducts(); loadCategories(); }
     else alert(data?.message || "خطأ");
   }
+
+  // ── price list ──
+  $("plRate").value = store.get("rate");
+  $("plRate").oninput = (e) => store.set("rate", e.target.value);
+  const plQuery = (format) => {
+    const p = new URLSearchParams({ categoryId: $("plCategory").value });
+    if ($("plRate").value) p.set("rate", $("plRate").value);
+    p.set("type", $("plType").value);
+    if ($("plType").value === "retail" && $("plMargin").value) p.set("margin", $("plMargin").value);
+    if (format) p.set("format", format);
+    return "/price-list?" + p;
+  };
+
+  $("btnPlShow").onclick = async () => {
+    const box = $("plPreview");
+    box.innerHTML = "";
+    if (!$("plCategory").value) return alert("اختار فئة");
+    const { status, data } = await api("GET", plQuery(), { token: tok() });
+    if (status !== 200) return alert(data?.message || "خطأ");
+
+    const header = el("div", { style: "border-bottom:2px solid var(--text);padding-bottom:8px;margin-bottom:8px" });
+    header.appendChild(el("div", { style: "font-size:22px;font-weight:700" }, data.category.name));
+    const n = (x) => x.toLocaleString("en-US");
+    header.appendChild(el("div", { style: "font-size:15px;color:var(--muted)" },
+      (data.type === "wholesale" && data.rate ? `الدولار: ${n(data.rate)} ل.س · ` : "")
+      + (data.type === "retail" ? `أسعار المبيع (ربح ${data.margin}%) · ` : "")
+      + new Date(data.generatedAt).toLocaleDateString("en-GB")));
+    box.appendChild(header);
+
+    if (!data.total) return box.appendChild(el("div", { style: "color:var(--muted);padding:20px 0" }, "ما في منتجات بهالفئة"));
+    for (const s of data.sections) {
+      if (s.title) box.appendChild(el("div", { style: "background:var(--text);color:var(--bg);padding:6px 10px;border-radius:6px;font-weight:700;margin:12px 0 4px" }, s.title));
+      for (const p of s.products) {
+        if (data.type === "retail") {
+          // الزبون: الاسم + السعر بسطر واحد بخط كبير
+          const row = el("div", { style: "display:flex;justify-content:space-between;gap:10px;padding:12px 4px;border-bottom:1px solid var(--border);font-size:20px" });
+          row.appendChild(el("span", {}, p.productName));
+          row.appendChild(el("b", { className: "mono", style: "white-space:nowrap" }, n(p.price)));
+          box.appendChild(row);
+        } else {
+          // صاحب المحل: الاسم فوق، وتحته الطرد (العدد) والوحدة
+          const card = el("div", { style: "padding:10px 4px;border-bottom:1px solid var(--border)" });
+          card.appendChild(el("div", { style: "font-size:18px;margin-bottom:4px" }, p.productName));
+          const line = el("div", { style: "display:flex;justify-content:space-between;gap:8px;font-size:15px;color:var(--muted)" });
+          const part = (label, val) => { const s = el("span", {}, label + " "); s.appendChild(el("b", { className: "mono", style: "color:var(--text);font-size:17px" }, val)); return s; };
+          line.append(part(`الطرد (${p.unitsPerPackage}):`, n(p.packagePrice)), part("الوحدة:", n(p.unitPrice)));
+          card.appendChild(line);
+          box.appendChild(card);
+        }
+      }
+    }
+  };
+
+  // نفس اللي رح يعمله التطبيق: يجيب الـ HTML ويمرّقه لـ expo-print
+  $("btnPlPrint").onclick = async () => {
+    if (!$("plCategory").value) return alert("اختار فئة");
+    const r = await fetch($("baseUrl").value.replace(/\/$/, "") + "/api/v2" + plQuery("html"), { headers: { Authorization: "Bearer " + tok() } });
+    if (!r.ok) { const d = await r.json().catch(() => ({})); return alert(d.message || "خطأ"); }
+    const html = await r.text();
+    const w = window.open("", "_blank");
+    if (!w) return alert("المتصفح منع النافذة، اسمحله بالـ popups");
+    w.document.write(html);
+    w.document.close();
+    setTimeout(() => w.print(), 400);
+  };
 
   // restore last tab (after all functions are defined)
   const lastTab = store.get("tab");
