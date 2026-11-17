@@ -1,17 +1,50 @@
 {
   "info": {
     "name": "PricePal API v2",
-    "description": "Auth + subscription flow.\n\nSet collection variables first: baseUrl, adminKey, phoneNumber, password.\n\nOrder: Auth/Login (register) → Admin/Activate Subscription (saves code) → Auth/Login (403 requiresCode) → Auth/Activate (saves token) → Auth/Me.",
+    "description": "Auth + subscription flow.\n\nSet collection variables first: baseUrl, adminKey, phoneNumber, password.\n\nOrder: Auth/Login (register) → Admin/Activate Subscription (saves code) → Auth/Login (403 requiresCode) → Auth/Activate (saves token) → Auth/Me.\n\nCatalog: Categories/Create parent → Create child → Products/Create → Update/Move → Delete.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:3000" },
-    { "key": "adminKey", "value": "" },
-    { "key": "phoneNumber", "value": "0999999999" },
-    { "key": "password", "value": "secret123" },
-    { "key": "months", "value": "1" },
-    { "key": "code", "value": "" },
-    { "key": "token", "value": "" }
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "adminKey",
+      "value": ""
+    },
+    {
+      "key": "phoneNumber",
+      "value": "0999999999"
+    },
+    {
+      "key": "password",
+      "value": "secret123"
+    },
+    {
+      "key": "months",
+      "value": "1"
+    },
+    {
+      "key": "code",
+      "value": ""
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "parentCategoryId",
+      "value": ""
+    },
+    {
+      "key": "categoryId",
+      "value": ""
+    },
+    {
+      "key": "productId",
+      "value": ""
+    }
   ],
   "item": [
     {
@@ -41,7 +74,12 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"phoneNumber\": \"{{phoneNumber}}\",\n  \"password\": \"{{password}}\"\n}"
@@ -72,7 +110,12 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"phoneNumber\": \"{{phoneNumber}}\",\n  \"password\": \"{{password}}\",\n  \"code\": \"{{code}}\"\n}"
@@ -97,10 +140,419 @@
             "method": "GET",
             "auth": {
               "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
             },
             "url": "{{baseUrl}}/api/v2/auth/me",
             "description": "401 = missing/invalid token, 403 = subscription expired (app should log out)"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Categories",
+      "description": "Protected: Bearer {{token}} (set by Auth/Activate or Auth/Login).",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{token}}",
+            "type": "string"
+          }
+        ]
+      },
+      "item": [
+        {
+          "name": "List (tree)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v2/categories",
+            "description": "Returns [{_id,name,productCount,children:[...]}] + uncategorizedCount"
+          }
+        },
+        {
+          "name": "Create parent",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"parentCategoryId\", pm.response.json().category._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"حبوب\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v2/categories",
+            "description": "Saves {{parentCategoryId}}"
+          }
+        },
+        {
+          "name": "Create child",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"categoryId\", pm.response.json().category._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"رز\",\n  \"parentId\": \"{{parentCategoryId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v2/categories",
+            "description": "Saves {{categoryId}}. Only 2 levels: a child of a child is rejected (422)."
+          }
+        },
+        {
+          "name": "Rename",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"أرز\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v2/categories/{{categoryId}}"
+          }
+        },
+        {
+          "name": "Move to top level",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parentId\": null\n}"
+            },
+            "url": "{{baseUrl}}/api/v2/categories/{{categoryId}}",
+            "description": "parentId: null = becomes a parent category. A parent with children cannot become a child (409)."
+          }
+        },
+        {
+          "name": "Move under parent",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parentId\": \"{{parentCategoryId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v2/categories/{{categoryId}}"
+          }
+        },
+        {
+          "name": "Delete",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/v2/categories/{{categoryId}}",
+            "description": "Child: its products move to the parent. Parent with children: 409. Parent without children: products become uncategorized."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Products",
+      "description": "Protected: Bearer {{token}}. Every query is scoped to the logged-in user.",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{token}}",
+            "type": "string"
+          }
+        ]
+      },
+      "item": [
+        {
+          "name": "List",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v2/products?page=1&limit=20",
+            "description": "Query: search, categoryId (<id> | none), page, limit (max 100). A parent categoryId also returns the products of its children."
+          }
+        },
+        {
+          "name": "List by category",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v2/products?categoryId={{parentCategoryId}}"
+          }
+        },
+        {
+          "name": "List uncategorized",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v2/products?categoryId=none"
+          }
+        },
+        {
+          "name": "Search",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v2/products?search=رز"
+          }
+        },
+        {
+          "name": "Create",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "const p = pm.response.json().product;",
+                  "pm.collectionVariables.set(\"productId\", p._id);",
+                  "pm.test(\"unit price computed by server\", () => pm.expect(p.wholesaleUnitPrice).to.eql(p.wholesalePackagePrice / p.unitsPerPackage));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productName\": \"رز بسمتي\",\n  \"wholesalePackagePrice\": 20,\n  \"unitsPerPackage\": 8,\n  \"currency\": \"USD\",\n  \"categoryId\": \"{{categoryId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v2/products",
+            "description": "wholesaleUnitPrice is computed by the server. categoryId is optional (null = uncategorized). Saves {{productId}}."
+          }
+        },
+        {
+          "name": "Update price",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"wholesalePackagePrice\": 24\n}"
+            },
+            "url": "{{baseUrl}}/api/v2/products/{{productId}}",
+            "description": "Partial update. Changing price/units/currency updates latestWholeprice."
+          }
+        },
+        {
+          "name": "Move to category",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categoryId\": \"{{parentCategoryId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v2/products/{{productId}}",
+            "description": "categoryId: null = remove from category."
+          }
+        },
+        {
+          "name": "Delete",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/v2/products/{{productId}}"
           }
         }
       ]
@@ -123,7 +575,12 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "x-admin-key", "value": "{{adminKey}}" }],
+            "header": [
+              {
+                "key": "x-admin-key",
+                "value": "{{adminKey}}"
+              }
+            ],
             "url": "{{baseUrl}}/api/v2/admin/users"
           }
         },
@@ -150,8 +607,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "x-admin-key", "value": "{{adminKey}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-admin-key",
+                "value": "{{adminKey}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -181,8 +644,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "x-admin-key", "value": "{{adminKey}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-admin-key",
+                "value": "{{adminKey}}"
+              }
             ],
             "body": {
               "mode": "raw",

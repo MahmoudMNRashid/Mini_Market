@@ -60,6 +60,7 @@
 
   <div class="tabs">
     <button data-tab="user" class="active">👤 User</button>
+    <button data-tab="catalog">📦 Catalog</button>
     <button data-tab="admin">🛠️ Admin</button>
   </div>
 
@@ -90,6 +91,54 @@
         <button id="btnLogout" class="secondary">Logout</button>
       </div>
       <div id="userState" class="status">مش مسجّل دخول</div>
+    </div>
+  </section>
+
+  <!-- ─────────────── CATALOG TAB ─────────────── -->
+  <section id="tab-catalog" class="hidden">
+    <div id="catalogNoToken" class="status warn hidden" style="margin:0 0 14px">لازم تعمل login من تاب User أول</div>
+
+    <div class="card">
+      <h2 id="catFormTitle">إضافة فئة</h2>
+      <div class="row">
+        <label>الاسم <input id="catName" placeholder="حبوب / رز"></label>
+        <label>الفئة الأب <select id="catParent"></select></label>
+        <button id="btnCatSave">إضافة</button>
+        <button id="btnCatCancel" class="secondary hidden">إلغاء</button>
+      </div>
+      <div id="catTree" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card">
+      <h2 id="prodFormTitle">إضافة منتج</h2>
+      <div class="row">
+        <label>اسم المنتج <input id="pName"></label>
+        <label>سعر الطرد <input id="pPrice" type="number" step="any" min="0"></label>
+        <label style="min-width:110px">عدد الوحدات <input id="pUnits" type="number" step="any" min="0"></label>
+        <label style="min-width:100px">العملة <select id="pCurrency"><option>USD</option><option>SYP</option></select></label>
+        <label>الفئة <select id="pCategory"></select></label>
+        <button id="btnProdSave">إضافة</button>
+        <button id="btnProdCancel" class="secondary hidden">إلغاء</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="margin-bottom:10px">
+        <label>بحث <input id="fSearch" placeholder="اسم المنتج"></label>
+        <label>فلترة بالفئة <select id="fCategory"></select></label>
+        <button id="btnProdSearch">عرض</button>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>المنتج</th><th>الفئة</th><th>سعر الطرد</th><th>الوحدات</th><th>سعر الوحدة</th><th>آخر سعر</th><th></th></tr></thead>
+          <tbody id="prodBody"><tr><td colspan="7" style="color:var(--muted)">اضغط عرض</td></tr></tbody>
+        </table>
+      </div>
+      <div class="row" style="justify-content:space-between; align-items:center; margin-top:10px">
+        <button id="btnPrev" class="small secondary">→ السابق</button>
+        <span id="pageInfo" style="font-size:13px; color:var(--muted)"></span>
+        <button id="btnNext" class="small secondary">التالي ←</button>
+      </div>
     </div>
   </section>
 
@@ -156,13 +205,12 @@
   document.querySelectorAll(".tabs button").forEach((b) => {
     b.onclick = () => {
       document.querySelectorAll(".tabs button").forEach((x) => x.classList.toggle("active", x === b));
-      $("tab-user").classList.toggle("hidden", b.dataset.tab !== "user");
-      $("tab-admin").classList.toggle("hidden", b.dataset.tab !== "admin");
+      ["user", "catalog", "admin"].forEach((t) => $("tab-" + t).classList.toggle("hidden", b.dataset.tab !== t));
       store.set("tab", b.dataset.tab);
       if (b.dataset.tab === "admin") loadUsers();
+      if (b.dataset.tab === "catalog") openCatalog();
     };
   });
-  if (store.get("tab") === "admin") document.querySelector('[data-tab="admin"]').click();
 
   // ── api ──
   async function api(method, path, { body, token, admin } = {}) {
@@ -297,6 +345,211 @@
     if (!d) return "—";
     return new Date(d).toLocaleString("en-GB", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
   }
+
+  // ═════════════════ CATALOG ═════════════════
+  const tok = () => $("uToken").value;
+  let categories = [];          // tree from API
+  let catNames = new Map();     // id → "أب / ابن"
+  let editingCatId = null;
+  let editingProdId = null;
+  let prodPage = 1, prodTotalPages = 1;
+
+  function el(tag, attrs = {}, text) {
+    const e = document.createElement(tag);
+    Object.assign(e, attrs);
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+  function fillSelect(select, options, value) {
+    select.innerHTML = "";
+    for (const [v, label] of options) select.appendChild(el("option", { value: v }, label));
+    if (value !== undefined) select.value = value;
+  }
+  function catOptions({ parentsOnly = false, excludeId = null } = {}) {
+    const opts = [];
+    for (const p of categories) {
+      if (p._id === excludeId) continue;
+      opts.push([p._id, p.name]);
+      if (!parentsOnly) for (const c of p.children) opts.push([c._id, "   ↳ " + c.name]);
+    }
+    return opts;
+  }
+  function refreshSelects() {
+    const keep = { cp: $("catParent").value, pc: $("pCategory").value, fc: $("fCategory").value };
+    fillSelect($("catParent"), [["", "— بدون (فئة أب) —"], ...catOptions({ parentsOnly: true, excludeId: editingCatId })], keep.cp);
+    fillSelect($("pCategory"), [["", "— بدون فئة —"], ...catOptions()], keep.pc);
+    fillSelect($("fCategory"), [["", "الكل"], ["none", "بدون فئة"], ...catOptions()], keep.fc);
+  }
+
+  async function openCatalog() {
+    $("catalogNoToken").classList.toggle("hidden", !!tok());
+    if (!tok()) return;
+    await loadCategories();
+    loadProducts();
+  }
+
+  // ── categories ──
+  async function loadCategories() {
+    const { status, data } = await api("GET", "/categories", { token: tok() });
+    if (status !== 200) return;
+    categories = data.categories;
+    catNames = new Map();
+    for (const p of categories) {
+      catNames.set(p._id, p.name);
+      for (const c of p.children) catNames.set(c._id, p.name + " / " + c.name);
+    }
+    refreshSelects();
+    renderTree(data.uncategorizedCount);
+  }
+
+  function renderTree(uncategorized) {
+    const box = $("catTree");
+    box.innerHTML = "";
+    if (!categories.length) { box.appendChild(el("div", { style: "color:var(--muted);font-size:13px" }, "ما في فئات")); }
+    const line = (cat, isChild) => {
+      const row = el("div", { style: `display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--border);${isChild ? "padding-inline-start:22px" : "font-weight:600"}` });
+      row.appendChild(el("span", { style: "flex:1" }, (isChild ? "↳ " : "📁 ") + cat.name));
+      row.appendChild(el("span", { style: "color:var(--muted);font-size:12px;font-weight:400" }, cat.productCount + " منتج"));
+      const bFilter = el("button", { className: "small secondary" }, "منتجاتها");
+      bFilter.onclick = () => { $("fCategory").value = cat._id; prodPage = 1; loadProducts(); };
+      const bEdit = el("button", { className: "small secondary" }, "تعديل");
+      bEdit.onclick = () => startEditCategory(cat, isChild);
+      const bDel = el("button", { className: "small secondary", style: "color:var(--err)" }, "حذف");
+      bDel.onclick = () => deleteCategory(cat);
+      row.append(bFilter, bEdit, bDel);
+      return row;
+    };
+    for (const p of categories) {
+      box.appendChild(line(p, false));
+      for (const c of p.children) box.appendChild(line(c, true));
+    }
+    box.appendChild(el("div", { style: "color:var(--muted);font-size:12px;padding-top:6px" }, `بدون فئة: ${uncategorized} منتج`));
+  }
+
+  function findParentId(childId) {
+    for (const p of categories) if (p.children.some((c) => c._id === childId)) return p._id;
+    return "";
+  }
+  function startEditCategory(cat, isChild) {
+    editingCatId = cat._id;
+    $("catFormTitle").textContent = "تعديل فئة: " + cat.name;
+    $("btnCatSave").textContent = "حفظ";
+    $("btnCatCancel").classList.remove("hidden");
+    $("catName").value = cat.name;
+    refreshSelects();
+    $("catParent").value = isChild ? findParentId(cat._id) : "";
+    $("catName").focus();
+  }
+  function resetCategoryForm() {
+    editingCatId = null;
+    $("catFormTitle").textContent = "إضافة فئة";
+    $("btnCatSave").textContent = "إضافة";
+    $("btnCatCancel").classList.add("hidden");
+    $("catName").value = "";
+    $("catParent").value = "";
+    refreshSelects();
+  }
+  $("btnCatCancel").onclick = resetCategoryForm;
+  $("btnCatSave").onclick = async () => {
+    const body = { name: $("catName").value.trim(), parentId: $("catParent").value || null };
+    const { status, data } = editingCatId
+      ? await api("PATCH", "/categories/" + editingCatId, { body, token: tok() })
+      : await api("POST", "/categories", { body, token: tok() });
+    if (status === 200 || status === 201) { resetCategoryForm(); await loadCategories(); loadProducts(); }
+    else alert(data?.message || "خطأ");
+  };
+  async function deleteCategory(cat) {
+    if (!confirm(`حذف الفئة "${cat.name}"؟\nمنتجاتها بتنتقل للفئة الأب أو بتصير بدون فئة.`)) return;
+    const { status, data } = await api("DELETE", "/categories/" + cat._id, { token: tok() });
+    if (status === 200) {
+      if ($("fCategory").value === cat._id) $("fCategory").value = "";
+      await loadCategories(); loadProducts();
+    } else alert(data?.message || "خطأ");
+  }
+
+  // ── products ──
+  async function loadProducts() {
+    if (!tok()) return;
+    const params = new URLSearchParams({ page: prodPage, limit: 20 });
+    if ($("fSearch").value.trim()) params.set("search", $("fSearch").value.trim());
+    if ($("fCategory").value) params.set("categoryId", $("fCategory").value);
+    const { status, data } = await api("GET", "/products?" + params, { token: tok() });
+    const tbody = $("prodBody");
+    tbody.innerHTML = "";
+    if (status !== 200) { tbody.appendChild(el("tr")).appendChild(el("td", { colSpan: 7, style: "color:var(--err)" }, data?.message || "خطأ")); return; }
+    prodTotalPages = Math.max(data.totalPages, 1);
+    $("pageInfo").textContent = `صفحة ${data.page} من ${prodTotalPages} · ${data.total} منتج`;
+    $("btnPrev").disabled = data.page <= 1;
+    $("btnNext").disabled = data.page >= prodTotalPages;
+    if (!data.products.length) { tbody.appendChild(el("tr")).appendChild(el("td", { colSpan: 7, style: "color:var(--muted)" }, "ما في منتجات")); return; }
+    for (const p of data.products) {
+      const tr = el("tr");
+      tr.appendChild(el("td", {}, p.productName));
+      tr.appendChild(el("td", { style: "color:var(--muted)" }, p.categoryId ? catNames.get(p.categoryId) || "?" : "—"));
+      tr.appendChild(el("td", { className: "mono" }, p.wholesalePackagePrice + " " + p.currency));
+      tr.appendChild(el("td", { className: "mono" }, String(p.unitsPerPackage)));
+      tr.appendChild(el("td", { className: "mono" }, p.wholesaleUnitPrice + " " + p.currency));
+      tr.appendChild(el("td", {}, fmt(p.latestWholeprice)));
+      const td = el("td");
+      const bEdit = el("button", { className: "small secondary" }, "تعديل");
+      bEdit.onclick = () => startEditProduct(p);
+      const bDel = el("button", { className: "small secondary", style: "color:var(--err);margin-inline-start:4px" }, "حذف");
+      bDel.onclick = () => deleteProduct(p);
+      td.append(bEdit, bDel);
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+    }
+  }
+  $("btnProdSearch").onclick = () => { prodPage = 1; loadProducts(); };
+  $("fSearch").onkeydown = (e) => { if (e.key === "Enter") { prodPage = 1; loadProducts(); } };
+  $("fCategory").onchange = () => { prodPage = 1; loadProducts(); };
+  $("btnPrev").onclick = () => { if (prodPage > 1) { prodPage--; loadProducts(); } };
+  $("btnNext").onclick = () => { if (prodPage < prodTotalPages) { prodPage++; loadProducts(); } };
+
+  function startEditProduct(p) {
+    editingProdId = p._id;
+    $("prodFormTitle").textContent = "تعديل منتج: " + p.productName;
+    $("btnProdSave").textContent = "حفظ";
+    $("btnProdCancel").classList.remove("hidden");
+    $("pName").value = p.productName;
+    $("pPrice").value = p.wholesalePackagePrice;
+    $("pUnits").value = p.unitsPerPackage;
+    $("pCurrency").value = p.currency;
+    $("pCategory").value = p.categoryId || "";
+    $("pName").scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+  function resetProductForm() {
+    editingProdId = null;
+    $("prodFormTitle").textContent = "إضافة منتج";
+    $("btnProdSave").textContent = "إضافة";
+    $("btnProdCancel").classList.add("hidden");
+    ["pName", "pPrice", "pUnits"].forEach((id) => ($(id).value = ""));
+  }
+  $("btnProdCancel").onclick = resetProductForm;
+  $("btnProdSave").onclick = async () => {
+    const body = {
+      productName: $("pName").value.trim(),
+      wholesalePackagePrice: Number($("pPrice").value),
+      unitsPerPackage: Number($("pUnits").value),
+      currency: $("pCurrency").value,
+      categoryId: $("pCategory").value || null,
+    };
+    const { status, data } = editingProdId
+      ? await api("PATCH", "/products/" + editingProdId, { body, token: tok() })
+      : await api("POST", "/products", { body, token: tok() });
+    if (status === 200 || status === 201) { resetProductForm(); loadProducts(); loadCategories(); }
+    else alert(data?.message || "خطأ");
+  };
+  async function deleteProduct(p) {
+    if (!confirm(`حذف "${p.productName}"؟`)) return;
+    const { status, data } = await api("DELETE", "/products/" + p._id, { token: tok() });
+    if (status === 200) { loadProducts(); loadCategories(); }
+    else alert(data?.message || "خطأ");
+  }
+
+  // restore last tab (after all functions are defined)
+  const lastTab = store.get("tab");
+  if (lastTab && lastTab !== "user") document.querySelector(`[data-tab="${lastTab}"]`)?.click();
 </script>
 </body>
 </html>
