@@ -502,6 +502,12 @@
   }
   $("btnProdSearch").onclick = () => { prodPage = 1; loadProducts(); };
   $("fSearch").onkeydown = (e) => { if (e.key === "Enter") { prodPage = 1; loadProducts(); } };
+  // بحث فوري: بيستنى 300ms بعد آخر حرف (نفس الفكرة لازم تنعمل بالتطبيق)
+  let searchTimer;
+  $("fSearch").oninput = () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => { prodPage = 1; loadProducts(); }, 300);
+  };
   $("fCategory").onchange = () => { prodPage = 1; loadProducts(); };
   $("btnPrev").onclick = () => { if (prodPage > 1) { prodPage--; loadProducts(); } };
   $("btnNext").onclick = () => { if (prodPage < prodTotalPages) { prodPage++; loadProducts(); } };

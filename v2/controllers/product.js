@@ -1,6 +1,8 @@
+import mongoose from "mongoose";
 import Product from "../models/product.js";
 import Category from "../models/category.js";
-import { httpError, isDuplicateKey, escapeRegex } from "../utils/httpError.js";
+import { httpError, isDuplicateKey } from "../utils/httpError.js";
+import { buildSearch } from "../utils/search.js";
 
 const DUPLICATE_MSG = "في منتج بنفس الاسم";
 
@@ -21,11 +23,11 @@ export const getProducts = async (req, res, next) => {
     const page = Math.max(parseInt(req.query.page) || 1, 1);
     const limit = Math.min(Math.max(parseInt(req.query.limit) || 20, 1), 100);
 
-    const filter = { userId: req.userId };
+    // ObjectId صريح لأنو الـ aggregate (تحت) ما بيعمل cast متل find
+    const filter = { userId: new mongoose.Types.ObjectId(req.userId) };
 
-    if (search && search.trim()) {
-      filter.productName = { $regex: escapeRegex(search.trim()), $options: "i" };
-    }
+    const s = search ? buildSearch(search) : null;
+    if (s) filter.$and = s.filter;
 
     if (categoryId === "none") {
       filter.categoryId = null;
@@ -41,15 +43,47 @@ export const getProducts = async (req, res, next) => {
       }
     }
 
-    const [products, total] = await Promise.all([
-      Product.find(filter)
-        .sort({ productName: 1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .select("-userId -__v")
-        .lean(),
-      Product.countDocuments(filter),
-    ]);
+    let products, total;
+
+    if (s) {
+      // ترتيب حسب الصلة: بيبلّش بأول كلمة (2) + الكلمات متتالية بنفس الترتيب (1)، بعدين أبجدي
+      const [result] = await Product.aggregate([
+        { $match: filter },
+        {
+          $addFields: {
+            _score: {
+              $add: [
+                { $cond: [{ $regexMatch: { input: "$productName", regex: s.prefix, options: "i" } }, 2, 0] },
+                { $cond: [{ $regexMatch: { input: "$productName", regex: s.phrase, options: "i" } }, 1, 0] },
+              ],
+            },
+          },
+        },
+        { $sort: { _score: -1, productName: 1 } },
+        {
+          $facet: {
+            products: [
+              { $skip: (page - 1) * limit },
+              { $limit: limit },
+              { $project: { userId: 0, __v: 0, _score: 0 } },
+            ],
+            total: [{ $count: "n" }],
+          },
+        },
+      ]);
+      products = result.products;
+      total = result.total[0]?.n || 0;
+    } else {
+      [products, total] = await Promise.all([
+        Product.find(filter)
+          .sort({ productName: 1 })
+          .skip((page - 1) * limit)
+          .limit(limit)
+          .select("-userId -__v")
+          .lean(),
+        Product.countDocuments(filter),
+      ]);
+    }
 
     res.status(200).json({
       products,
