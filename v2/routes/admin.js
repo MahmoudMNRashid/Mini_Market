@@ -6,6 +6,7 @@ import {
   getDashboard,
   renewSubscription,
 } from "../controllers/admin.js";
+import { getErrors, resolveError } from "../controllers/errorLog.js";
 import { checkAdmin } from "../middleware/checkAdmin.js";
 import { normalizePhoneBody } from "../utils/phone.js";
 
@@ -20,5 +21,7 @@ router.post("/grant-trial", normalizePhoneBody, grantTrial);
 router.get("/users", getAllUsers);
 router.get("/dashboard", getDashboard);
 router.post("/renew", normalizePhoneBody, renewSubscription);
+router.get("/errors", getErrors);
+router.post("/errors/resolve", resolveError);
 
 export default router;

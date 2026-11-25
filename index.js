@@ -11,11 +11,15 @@ import adminRouteV2 from "./v2/routes/admin.js";
 import categoryRouteV2 from "./v2/routes/category.js";
 import productRouteV2 from "./v2/routes/product.js";
 import priceListRouteV2 from "./v2/routes/priceList.js";
+import logsRouteV2 from "./v2/routes/logs.js";
+import { recordServerError } from "./v2/controllers/errorLog.js";
 connect();
 app.get("/test", async (req, res) => {
   res.status(200).json({ message: "hello" });
 });
 
+// سجل أخطاء التطبيق: حد صغير للحجم (أكبر من هيك ← 413 قبل ما يوصل للكود)
+app.use("/api/v2/logs", bodyParser.json({ limit: "16kb" }));
 app.use(bodyParser.json()); // application/jsonss
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -35,9 +39,12 @@ app.use("/api/v2/admin", adminRouteV2);
 app.use("/api/v2/categories", categoryRouteV2);
 app.use("/api/v2/products", productRouteV2);
 app.use("/api/v2/price-list", priceListRouteV2);
+app.use("/api/v2/logs", logsRouteV2);
 app.use("/product", productRoute);
-app.use((error, req, res, next) => {
-  const status = error.statusCode || 500;
+app.use(async (error, req, res, next) => {
+  const status = error.statusCode || error.status || 500;
+  // 5xx بس بينحفظ بسجل الأخطاء (تبويب الإدارة). منستنّاه لأنو Vercel بيوقف الشغل بعد الرد
+  if (status >= 500) await recordServerError(error, req);
   const message = error.message || error.error || error || "Something Accurr";
   const data = error.data || null;
 

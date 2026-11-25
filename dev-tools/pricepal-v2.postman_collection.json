@@ -1,837 +1,910 @@
 {
-  "info": {
-    "name": "PricePal API v2",
-    "description": "Auth + subscription flow.\n\nSet collection variables first: baseUrl, adminKey, phoneNumber, password.\n\nOrder: Auth/Login (register) → Admin/Activate Subscription (saves code) → Auth/Login (403 requiresCode) → Auth/Activate (saves token) → Auth/Me.\n\nCatalog: Categories/Create parent → Create child → Products/Create → Update/Move → Delete.\n\nPrice list: needs {{parentCategoryId}} (Categories/Create parent) and {{rate}}.",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-  },
-  "variable": [
-    {
-      "key": "baseUrl",
-      "value": "http://localhost:3000"
-    },
-    {
-      "key": "adminKey",
-      "value": ""
-    },
-    {
-      "key": "phoneNumber",
-      "value": "0999999999"
-    },
-    {
-      "key": "password",
-      "value": "secret123"
-    },
-    {
-      "key": "months",
-      "value": "1"
-    },
-    {
-      "key": "code",
-      "value": ""
-    },
-    {
-      "key": "token",
-      "value": ""
-    },
-    {
-      "key": "parentCategoryId",
-      "value": ""
-    },
-    {
-      "key": "categoryId",
-      "value": ""
-    },
-    {
-      "key": "productId",
-      "value": ""
-    },
-    {
-      "key": "rate",
-      "value": "13500"
-    },
-    {
-      "key": "margin",
-      "value": "12.5"
-    }
-  ],
-  "item": [
-    {
-      "name": "Auth",
-      "item": [
-        {
-          "name": "Login / Register",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const body = pm.response.json();",
-                  "if (pm.response.code === 200 && body.token) {",
-                  "  pm.collectionVariables.set('token', body.token);",
-                  "}",
-                  "pm.test('activationCode is never returned', () => {",
-                  "  pm.expect(body).to.not.have.property('activationCode');",
-                  "});",
-                  "pm.test('expected status (200 / 201 / 403)', () => {",
-                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 403]);",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"phoneNumber\": \"{{phoneNumber}}\",\n  \"password\": \"{{password}}\"\n}"
-            },
-            "url": "{{baseUrl}}/api/v2/auth/login",
-            "description": "201 = new account created (requiresActivation)\n403 + requiresCode = subscription active, enter code\n403 without requiresCode = subscription not active\n200 = token"
-          }
-        },
-        {
-          "name": "Activate (code)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const body = pm.response.json();",
-                  "if (pm.response.code === 200 && body.token) {",
-                  "  pm.collectionVariables.set('token', body.token);",
-                  "}",
-                  "pm.test('status 200 + token', () => {",
-                  "  pm.response.to.have.status(200);",
-                  "  pm.expect(body.token).to.be.a('string');",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"phoneNumber\": \"{{phoneNumber}}\",\n  \"password\": \"{{password}}\",\n  \"code\": \"{{code}}\"\n}"
-            },
-            "url": "{{baseUrl}}/api/v2/auth/activate"
-          }
-        },
-        {
-          "name": "Me (protected)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('status 200', () => pm.response.to.have.status(200));"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": "{{baseUrl}}/api/v2/auth/me",
-            "description": "401 = missing/invalid token, 403 = subscription expired (app should log out)"
-          }
-        }
-      ]
-    },
-    {
-      "name": "Categories",
-      "description": "Protected: Bearer {{token}} (set by Auth/Activate or Auth/Login).",
-      "auth": {
-        "type": "bearer",
-        "bearer": [
-          {
-            "key": "token",
-            "value": "{{token}}",
-            "type": "string"
-          }
-        ]
-      },
-      "item": [
-        {
-          "name": "List (tree)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/api/v2/categories",
-            "description": "Returns [{_id,name,productCount,children:[...]}] + uncategorizedCount"
-          }
-        },
-        {
-          "name": "Create parent",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
-                  "pm.collectionVariables.set(\"parentCategoryId\", pm.response.json().category._id);"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"حبوب\"\n}"
-            },
-            "url": "{{baseUrl}}/api/v2/categories",
-            "description": "Saves {{parentCategoryId}}"
-          }
-        },
-        {
-          "name": "Create child",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
-                  "pm.collectionVariables.set(\"categoryId\", pm.response.json().category._id);"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"رز\",\n  \"parentId\": \"{{parentCategoryId}}\"\n}"
-            },
-            "url": "{{baseUrl}}/api/v2/categories",
-            "description": "Saves {{categoryId}}. Only 2 levels: a child of a child is rejected (422)."
-          }
-        },
-        {
-          "name": "Rename",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"أرز\"\n}"
-            },
-            "url": "{{baseUrl}}/api/v2/categories/{{categoryId}}"
-          }
-        },
-        {
-          "name": "Move to top level",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"parentId\": null\n}"
-            },
-            "url": "{{baseUrl}}/api/v2/categories/{{categoryId}}",
-            "description": "parentId: null = becomes a parent category. A parent with children cannot become a child (409)."
-          }
-        },
-        {
-          "name": "Move under parent",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"parentId\": \"{{parentCategoryId}}\"\n}"
-            },
-            "url": "{{baseUrl}}/api/v2/categories/{{categoryId}}"
-          }
-        },
-        {
-          "name": "Delete",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "url": "{{baseUrl}}/api/v2/categories/{{categoryId}}",
-            "description": "Child: its products move to the parent. Parent with children: 409. Parent without children: products become uncategorized."
-          }
-        }
-      ]
-    },
-    {
-      "name": "Products",
-      "description": "Protected: Bearer {{token}}. Every query is scoped to the logged-in user.",
-      "auth": {
-        "type": "bearer",
-        "bearer": [
-          {
-            "key": "token",
-            "value": "{{token}}",
-            "type": "string"
-          }
-        ]
-      },
-      "item": [
-        {
-          "name": "List",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/api/v2/products?page=1&limit=20",
-            "description": "Query: search, categoryId (<id> | none), page, limit (max 100). A parent categoryId also returns the products of its children."
-          }
-        },
-        {
-          "name": "List by category",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/api/v2/products?categoryId={{parentCategoryId}}"
-          }
-        },
-        {
-          "name": "List uncategorized",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/api/v2/products?categoryId=none"
-          }
-        },
-        {
-          "name": "Search",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/api/v2/products?search=رز"
-          }
-        },
-        {
-          "name": "Create",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
-                  "const p = pm.response.json().product;",
-                  "pm.collectionVariables.set(\"productId\", p._id);",
-                  "pm.test(\"unit price computed by server\", () => pm.expect(p.wholesaleUnitPrice).to.eql(p.wholesalePackagePrice / p.unitsPerPackage));"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"productName\": \"رز بسمتي\",\n  \"wholesalePackagePrice\": 20,\n  \"unitsPerPackage\": 8,\n  \"currency\": \"USD\",\n  \"categoryId\": \"{{categoryId}}\"\n}"
-            },
-            "url": "{{baseUrl}}/api/v2/products",
-            "description": "wholesaleUnitPrice is computed by the server. categoryId is optional (null = uncategorized). Saves {{productId}}."
-          }
-        },
-        {
-          "name": "Update price",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"wholesalePackagePrice\": 24\n}"
-            },
-            "url": "{{baseUrl}}/api/v2/products/{{productId}}",
-            "description": "Partial update. Changing price/units/currency updates latestWholeprice."
-          }
-        },
-        {
-          "name": "Move to category",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"categoryId\": \"{{parentCategoryId}}\"\n}"
-            },
-            "url": "{{baseUrl}}/api/v2/products/{{productId}}",
-            "description": "categoryId: null = remove from category."
-          }
-        },
-        {
-          "name": "Delete",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "url": "{{baseUrl}}/api/v2/products/{{productId}}"
-          }
-        }
-      ]
-    },
-    {
-      "name": "Price List",
-      "description": "Protected: Bearer {{token}}.\n\ntype=wholesale (default, for the shop owner): unitsPerPackage + packagePrice + unitPrice in SYP, includes rate.\ntype=retail (for customers): productName + price (unit price + margin%, rounded UP to 100). No wholesale prices, no rate.\n\nUSD prices are converted with {{rate}} and rounded to the nearest 100. SYP package prices are kept as entered.\nrate is required only if the category has USD products.\nA parent category returns its own products (section title = null) + one section per child category.\nformat=html returns a ready-to-print page for expo-print (Print.printAsync / printToFileAsync).",
-      "auth": {
-        "type": "bearer",
-        "bearer": [
-          {
-            "key": "token",
-            "value": "{{token}}",
-            "type": "string"
-          }
-        ]
-      },
-      "item": [
-        {
-          "name": "Wholesale (JSON)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
-                  "const b = pm.response.json();",
-                  "pm.test(\"wholesale fields\", () => {",
-                  "  pm.expect(b.type).to.eql(\"wholesale\");",
-                  "  const p = b.sections.flatMap(s => s.products)[0];",
-                  "  if (p) pm.expect(p).to.have.all.keys('_id', 'productName', 'unitsPerPackage', 'packagePrice', 'unitPrice');",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/api/v2/price-list?categoryId={{parentCategoryId}}&rate={{rate}}"
-          }
-        },
-        {
-          "name": "Wholesale (HTML for print)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
-                  "pm.test(\"is html\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"text/html\"));"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/api/v2/price-list?categoryId={{parentCategoryId}}&rate={{rate}}&format=html",
-            "description": "Open the Preview tab in Postman to see the printable page."
-          }
-        },
-        {
-          "name": "Retail for customers (JSON)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
-                  "const b = pm.response.json();",
-                  "pm.test(\"no wholesale data leaks\", () => {",
-                  "  pm.expect(b).to.not.have.property('rate');",
-                  "  const p = b.sections.flatMap(s => s.products)[0];",
-                  "  if (p) pm.expect(p).to.have.all.keys('_id', 'productName', 'price');",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/api/v2/price-list?categoryId={{parentCategoryId}}&rate={{rate}}&type=retail&margin={{margin}}",
-            "description": "margin is optional (default 12.5)."
-          }
-        },
-        {
-          "name": "Retail for customers (HTML for print)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
-                  "pm.test(\"no dollar rate in page\", () => pm.expect(pm.response.text()).to.not.include(\"الدولار\"));"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/api/v2/price-list?categoryId={{parentCategoryId}}&rate={{rate}}&type=retail&margin={{margin}}&format=html"
-          }
-        }
-      ]
-    },
-    {
-      "name": "Admin",
-      "item": [
-        {
-          "name": "Users list",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('status 200', () => pm.response.to.have.status(200));"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "x-admin-key",
-                "value": "{{adminKey}}"
-              }
-            ],
-            "url": "{{baseUrl}}/api/v2/admin/users"
-          }
-        },
-        {
-          "name": "Activate Subscription",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const body = pm.response.json();",
-                  "if (pm.response.code === 200 && body.activationCode) {",
-                  "  pm.collectionVariables.set('code', body.activationCode);",
-                  "}",
-                  "pm.test('status 200 + code', () => {",
-                  "  pm.response.to.have.status(200);",
-                  "  pm.expect(body.activationCode).to.be.a('string');",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "x-admin-key",
-                "value": "{{adminKey}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"phoneNumber\": \"{{phoneNumber}}\",\n  \"months\": {{months}}\n}"
-            },
-            "url": "{{baseUrl}}/api/v2/admin/activate-subscription",
-            "description": "Saves activationCode into the {{code}} collection variable."
-          }
-        },
-        {
-          "name": "Grant Trial (7 days)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const body = pm.response.json();",
-                  "if (pm.response.code === 200 && body.activationCode) {",
-                  "  pm.collectionVariables.set('code', body.activationCode);",
-                  "}",
-                  "pm.test('status 200', () => pm.response.to.have.status(200));"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "x-admin-key",
-                "value": "{{adminKey}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"phoneNumber\": \"{{phoneNumber}}\"\n}"
-            },
-            "url": "{{baseUrl}}/api/v2/admin/grant-trial",
-            "description": "Warning: overwrites current subscriptionEnd (can shorten a paid subscription)."
-          }
-        },
-        {
-          "name": "Dashboard (stats + pending + subscribers)",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "x-admin-key",
-                "value": "{{adminKey}}"
-              }
-            ],
-            "url": "{{baseUrl}}/api/v2/admin/dashboard",
-            "description": "Also accepts the owner's JWT (Authorization: Bearer) instead of x-admin-key. Owner phones (OWNER_PHONE / OWNER_LINKED_PHONE) are excluded from stats and subscribers."
-          }
-        },
-        {
-          "name": "Renew by days (+30)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "x-admin-key",
-                "value": "{{adminKey}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"phoneNumber\": \"{{phoneNumber}}\",\n  \"days\": 30\n}"
-            },
-            "url": "{{baseUrl}}/api/v2/admin/renew",
-            "description": "Extends from the current end if still active, else from now. Generates a new code if it was burned; needsCode=true means the user must enter it. 409 for owner accounts."
-          }
-        },
-        {
-          "name": "Users list — no key (expect 401)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('admin is protected (401)', () => pm.response.to.have.status(401));"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/api/v2/admin/users"
-          }
-        }
-      ]
-    }
-  ]
+	"info": {
+		"name": "PricePal API v2",
+		"description": "Auth + subscription flow.\n\nSet collection variables first: baseUrl, adminKey, phoneNumber, password.\n\nOrder: Auth/Login (register) → Admin/Activate Subscription (saves code) → Auth/Login (403 requiresCode) → Auth/Activate (saves token) → Auth/Me.\n\nCatalog: Categories/Create parent → Create child → Products/Create → Update/Move → Delete.\n\nPrice list: needs {{parentCategoryId}} (Categories/Create parent) and {{rate}}.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:3000"
+		},
+		{
+			"key": "adminKey",
+			"value": ""
+		},
+		{
+			"key": "phoneNumber",
+			"value": "0999999999"
+		},
+		{
+			"key": "password",
+			"value": "secret123"
+		},
+		{
+			"key": "months",
+			"value": "1"
+		},
+		{
+			"key": "code",
+			"value": ""
+		},
+		{
+			"key": "token",
+			"value": ""
+		},
+		{
+			"key": "parentCategoryId",
+			"value": ""
+		},
+		{
+			"key": "categoryId",
+			"value": ""
+		},
+		{
+			"key": "productId",
+			"value": ""
+		},
+		{
+			"key": "rate",
+			"value": "13500"
+		},
+		{
+			"key": "margin",
+			"value": "12.5"
+		}
+	],
+	"item": [
+		{
+			"name": "Auth",
+			"item": [
+				{
+					"name": "Login / Register",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"if (pm.response.code === 200 && body.token) {",
+									"  pm.collectionVariables.set('token', body.token);",
+									"}",
+									"pm.test('activationCode is never returned', () => {",
+									"  pm.expect(body).to.not.have.property('activationCode');",
+									"});",
+									"pm.test('expected status (200 / 201 / 403)', () => {",
+									"  pm.expect(pm.response.code).to.be.oneOf([200, 201, 403]);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"phoneNumber\": \"{{phoneNumber}}\",\n  \"password\": \"{{password}}\"\n}"
+						},
+						"url": "{{baseUrl}}/api/v2/auth/login",
+						"description": "201 = new account created (requiresActivation)\n403 + requiresCode = subscription active, enter code\n403 without requiresCode = subscription not active\n200 = token"
+					}
+				},
+				{
+					"name": "Activate (code)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"if (pm.response.code === 200 && body.token) {",
+									"  pm.collectionVariables.set('token', body.token);",
+									"}",
+									"pm.test('status 200 + token', () => {",
+									"  pm.response.to.have.status(200);",
+									"  pm.expect(body.token).to.be.a('string');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"phoneNumber\": \"{{phoneNumber}}\",\n  \"password\": \"{{password}}\",\n  \"code\": \"{{code}}\"\n}"
+						},
+						"url": "{{baseUrl}}/api/v2/auth/activate"
+					}
+				},
+				{
+					"name": "Me (protected)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('status 200', () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"url": "{{baseUrl}}/api/v2/auth/me",
+						"description": "401 = missing/invalid token, 403 = subscription expired (app should log out)"
+					}
+				}
+			]
+		},
+		{
+			"name": "Categories",
+			"description": "Protected: Bearer {{token}} (set by Auth/Activate or Auth/Login).",
+			"auth": {
+				"type": "bearer",
+				"bearer": [
+					{
+						"key": "token",
+						"value": "{{token}}",
+						"type": "string"
+					}
+				]
+			},
+			"item": [
+				{
+					"name": "List (tree)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "{{baseUrl}}/api/v2/categories",
+						"description": "Returns [{_id,name,productCount,children:[...]}] + uncategorizedCount"
+					}
+				},
+				{
+					"name": "Create parent",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+									"pm.collectionVariables.set(\"parentCategoryId\", pm.response.json().category._id);"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"حبوب\"\n}"
+						},
+						"url": "{{baseUrl}}/api/v2/categories",
+						"description": "Saves {{parentCategoryId}}"
+					}
+				},
+				{
+					"name": "Create child",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+									"pm.collectionVariables.set(\"categoryId\", pm.response.json().category._id);"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"رز\",\n  \"parentId\": \"{{parentCategoryId}}\"\n}"
+						},
+						"url": "{{baseUrl}}/api/v2/categories",
+						"description": "Saves {{categoryId}}. Only 2 levels: a child of a child is rejected (422)."
+					}
+				},
+				{
+					"name": "Rename",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"أرز\"\n}"
+						},
+						"url": "{{baseUrl}}/api/v2/categories/{{categoryId}}"
+					}
+				},
+				{
+					"name": "Move to top level",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"parentId\": null\n}"
+						},
+						"url": "{{baseUrl}}/api/v2/categories/{{categoryId}}",
+						"description": "parentId: null = becomes a parent category. A parent with children cannot become a child (409)."
+					}
+				},
+				{
+					"name": "Move under parent",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"parentId\": \"{{parentCategoryId}}\"\n}"
+						},
+						"url": "{{baseUrl}}/api/v2/categories/{{categoryId}}"
+					}
+				},
+				{
+					"name": "Delete",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": "{{baseUrl}}/api/v2/categories/{{categoryId}}",
+						"description": "Child: its products move to the parent. Parent with children: 409. Parent without children: products become uncategorized."
+					}
+				}
+			]
+		},
+		{
+			"name": "Products",
+			"description": "Protected: Bearer {{token}}. Every query is scoped to the logged-in user.",
+			"auth": {
+				"type": "bearer",
+				"bearer": [
+					{
+						"key": "token",
+						"value": "{{token}}",
+						"type": "string"
+					}
+				]
+			},
+			"item": [
+				{
+					"name": "List",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "{{baseUrl}}/api/v2/products?page=1&limit=20",
+						"description": "Query: search, categoryId (<id> | none), page, limit (max 100). A parent categoryId also returns the products of its children."
+					}
+				},
+				{
+					"name": "List by category",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "{{baseUrl}}/api/v2/products?categoryId={{parentCategoryId}}"
+					}
+				},
+				{
+					"name": "List uncategorized",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "{{baseUrl}}/api/v2/products?categoryId=none"
+					}
+				},
+				{
+					"name": "Search",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "{{baseUrl}}/api/v2/products?search=رز"
+					}
+				},
+				{
+					"name": "Create",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+									"const p = pm.response.json().product;",
+									"pm.collectionVariables.set(\"productId\", p._id);",
+									"pm.test(\"unit price computed by server\", () => pm.expect(p.wholesaleUnitPrice).to.eql(p.wholesalePackagePrice / p.unitsPerPackage));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"productName\": \"رز بسمتي\",\n  \"wholesalePackagePrice\": 20,\n  \"unitsPerPackage\": 8,\n  \"currency\": \"USD\",\n  \"categoryId\": \"{{categoryId}}\"\n}"
+						},
+						"url": "{{baseUrl}}/api/v2/products",
+						"description": "wholesaleUnitPrice is computed by the server. categoryId is optional (null = uncategorized). Saves {{productId}}."
+					}
+				},
+				{
+					"name": "Update price",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"wholesalePackagePrice\": 24\n}"
+						},
+						"url": "{{baseUrl}}/api/v2/products/{{productId}}",
+						"description": "Partial update. Changing price/units/currency updates latestWholeprice."
+					}
+				},
+				{
+					"name": "Move to category",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"categoryId\": \"{{parentCategoryId}}\"\n}"
+						},
+						"url": "{{baseUrl}}/api/v2/products/{{productId}}",
+						"description": "categoryId: null = remove from category."
+					}
+				},
+				{
+					"name": "Delete",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": "{{baseUrl}}/api/v2/products/{{productId}}"
+					}
+				}
+			]
+		},
+		{
+			"name": "Price List",
+			"description": "Protected: Bearer {{token}}.\n\ntype=wholesale (default, for the shop owner): unitsPerPackage + packagePrice + unitPrice in SYP, includes rate.\ntype=retail (for customers): productName + price (unit price + margin%, rounded UP to 100). No wholesale prices, no rate.\n\nUSD prices are converted with {{rate}} and rounded to the nearest 100. SYP package prices are kept as entered.\nrate is required only if the category has USD products.\nA parent category returns its own products (section title = null) + one section per child category.\nformat=html returns a ready-to-print page for expo-print (Print.printAsync / printToFileAsync).",
+			"auth": {
+				"type": "bearer",
+				"bearer": [
+					{
+						"key": "token",
+						"value": "{{token}}",
+						"type": "string"
+					}
+				]
+			},
+			"item": [
+				{
+					"name": "Wholesale (JSON)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+									"const b = pm.response.json();",
+									"pm.test(\"wholesale fields\", () => {",
+									"  pm.expect(b.type).to.eql(\"wholesale\");",
+									"  const p = b.sections.flatMap(s => s.products)[0];",
+									"  if (p) pm.expect(p).to.have.all.keys('_id', 'productName', 'unitsPerPackage', 'packagePrice', 'unitPrice');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": "{{baseUrl}}/api/v2/price-list?categoryId={{parentCategoryId}}&rate={{rate}}"
+					}
+				},
+				{
+					"name": "Wholesale (HTML for print)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+									"pm.test(\"is html\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"text/html\"));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": "{{baseUrl}}/api/v2/price-list?categoryId={{parentCategoryId}}&rate={{rate}}&format=html",
+						"description": "Open the Preview tab in Postman to see the printable page."
+					}
+				},
+				{
+					"name": "Retail for customers (JSON)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+									"const b = pm.response.json();",
+									"pm.test(\"no wholesale data leaks\", () => {",
+									"  pm.expect(b).to.not.have.property('rate');",
+									"  const p = b.sections.flatMap(s => s.products)[0];",
+									"  if (p) pm.expect(p).to.have.all.keys('_id', 'productName', 'price');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": "{{baseUrl}}/api/v2/price-list?categoryId={{parentCategoryId}}&rate={{rate}}&type=retail&margin={{margin}}",
+						"description": "margin is optional (default 12.5)."
+					}
+				},
+				{
+					"name": "Retail for customers (HTML for print)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+									"pm.test(\"no dollar rate in page\", () => pm.expect(pm.response.text()).to.not.include(\"الدولار\"));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": "{{baseUrl}}/api/v2/price-list?categoryId={{parentCategoryId}}&rate={{rate}}&type=retail&margin={{margin}}&format=html"
+					}
+				}
+			]
+		},
+		{
+			"name": "Admin",
+			"item": [
+				{
+					"name": "Users list",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('status 200', () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "x-admin-key",
+								"value": "{{adminKey}}"
+							}
+						],
+						"url": "{{baseUrl}}/api/v2/admin/users"
+					}
+				},
+				{
+					"name": "Activate Subscription",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"if (pm.response.code === 200 && body.activationCode) {",
+									"  pm.collectionVariables.set('code', body.activationCode);",
+									"}",
+									"pm.test('status 200 + code', () => {",
+									"  pm.response.to.have.status(200);",
+									"  pm.expect(body.activationCode).to.be.a('string');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "x-admin-key",
+								"value": "{{adminKey}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"phoneNumber\": \"{{phoneNumber}}\",\n  \"months\": {{months}}\n}"
+						},
+						"url": "{{baseUrl}}/api/v2/admin/activate-subscription",
+						"description": "Saves activationCode into the {{code}} collection variable."
+					}
+				},
+				{
+					"name": "Grant Trial (7 days)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const body = pm.response.json();",
+									"if (pm.response.code === 200 && body.activationCode) {",
+									"  pm.collectionVariables.set('code', body.activationCode);",
+									"}",
+									"pm.test('status 200', () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "x-admin-key",
+								"value": "{{adminKey}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"phoneNumber\": \"{{phoneNumber}}\"\n}"
+						},
+						"url": "{{baseUrl}}/api/v2/admin/grant-trial",
+						"description": "Warning: overwrites current subscriptionEnd (can shorten a paid subscription)."
+					}
+				},
+				{
+					"name": "Dashboard (stats + pending + subscribers)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "x-admin-key",
+								"value": "{{adminKey}}"
+							}
+						],
+						"url": "{{baseUrl}}/api/v2/admin/dashboard",
+						"description": "Also accepts the owner's JWT (Authorization: Bearer) instead of x-admin-key. Owner phones (OWNER_PHONE / OWNER_LINKED_PHONE) are excluded from stats and subscribers."
+					}
+				},
+				{
+					"name": "Renew by days (+30)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "x-admin-key",
+								"value": "{{adminKey}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"phoneNumber\": \"{{phoneNumber}}\",\n  \"days\": 30\n}"
+						},
+						"url": "{{baseUrl}}/api/v2/admin/renew",
+						"description": "Extends from the current end if still active, else from now. Generates a new code if it was burned; needsCode=true means the user must enter it. 409 for owner accounts."
+					}
+				},
+				{
+					"name": "Users list — no key (expect 401)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('admin is protected (401)', () => pm.response.to.have.status(401));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"url": "{{baseUrl}}/api/v2/admin/users"
+					}
+				},
+				{
+					"name": "Errors",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "x-admin-key",
+								"value": "{{adminKey}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": "{{baseUrl}}/api/v2/admin/errors",
+						"description": "Extends from the current end if still active, else from now. Generates a new code if it was burned; needsCode=true means the user must enter it. 409 for owner accounts."
+					}
+				},
+				{
+					"name": "Resolve error",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "x-admin-key",
+								"value": "{{adminKey}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"id\": \"<error id>\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "{{baseUrl}}/api/v2/admin/errors/resolve",
+						"description": "Extends from the current end if still active, else from now. Generates a new code if it was burned; needsCode=true means the user must enter it. 409 for owner accounts."
+					}
+				}
+			]
+		},
+		{
+			"name": "Logs",
+			"item": [
+				{
+					"name": "Send app logs",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"entries\": [\n    {\n      \"kind\": \"js\",\n      \"message\": \"test from postman\",\n      \"route\": \"(tabs)/index\",\n      \"appVersion\": \"1.0.0\"\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "{{baseUrl}}/api/v2/logs",
+						"description": "Extends from the current end if still active, else from now. Generates a new code if it was burned; needsCode=true means the user must enter it. 409 for owner accounts."
+					}
+				}
+			]
+		}
+	]
 }
