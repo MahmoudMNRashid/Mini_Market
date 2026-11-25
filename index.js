@@ -57,5 +57,3 @@ app.use(async (error, req, res, next) => {
   }
 });
 
-// مدة الطلب على Vercel: قراءة الفاتورة بتاخد لحد 55 ثانية (الافتراضي بيقطع بعد 15، والحد بالخطة المجانية 60)
-export const config = { maxDuration: 60 };
