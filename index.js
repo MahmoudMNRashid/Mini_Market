@@ -56,3 +56,6 @@ app.use(async (error, req, res, next) => {
     res.status(status).json({ message });
   }
 });
+
+// مدة الطلب على Vercel: قراءة الفاتورة بتاخد لحد 90 ثانية (الافتراضي كان بيقطع بعد 15)
+export const config = { maxDuration: 120 };
