@@ -143,8 +143,8 @@ const isRetryable = (err) => {
 
 const isBadKey = (err) => /API_KEY_INVALID|API key not valid|PERMISSION_DENIED/i.test(err?.message ?? "");
 
-// deadlineMs: الوقت الكلي المسموح (Vercel بيقطع الطلب بعد مدة)
-export const scanInvoiceWithFallback = async ({ buffer, mimeType, deadlineMs = Number(process.env.SCAN_DEADLINE_MS) || 55_000 }) => {
+// deadlineMs: الوقت الكلي المسموح (Vercel بيقطع الطلب بعد 100 ثانية: Settings → Functions)
+export const scanInvoiceWithFallback = async ({ buffer, mimeType, deadlineMs = Number(process.env.SCAN_DEADLINE_MS) || 85_000 }) => {
   const started = Date.now();
   const models = [...new Set([defaultModel(), ...fallbackModels()])];
   let lastError = null;
@@ -153,7 +153,7 @@ export const scanInvoiceWithFallback = async ({ buffer, mimeType, deadlineMs = N
     const left = deadlineMs - (Date.now() - started);
     if (left < 8_000) break; // ما في وقت كافي لمحاولة جديدة
     try {
-      return await scanInvoice({ buffer, mimeType, model, timeoutMs: Math.min(left, 35_000) });
+      return await scanInvoice({ buffer, mimeType, model, timeoutMs: Math.min(left, 40_000) });
     } catch (err) {
       if (err.statusCode) throw err; // httpError من عنا (جواب مو مفهوم…) ← ما في داعي نعيد
       if (isBadKey(err)) throw httpError(503, "قراءة الفواتير مو مفعّلة على السيرفر، خبّرنا");
