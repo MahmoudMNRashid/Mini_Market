@@ -12,6 +12,7 @@ import categoryRouteV2 from "./v2/routes/category.js";
 import productRouteV2 from "./v2/routes/product.js";
 import priceListRouteV2 from "./v2/routes/priceList.js";
 import logsRouteV2 from "./v2/routes/logs.js";
+import invoiceRouteV2 from "./v2/routes/invoice.js";
 import { recordServerError } from "./v2/controllers/errorLog.js";
 connect();
 app.get("/test", async (req, res) => {
@@ -40,6 +41,7 @@ app.use("/api/v2/categories", categoryRouteV2);
 app.use("/api/v2/products", productRouteV2);
 app.use("/api/v2/price-list", priceListRouteV2);
 app.use("/api/v2/logs", logsRouteV2);
+app.use("/api/v2/invoices", invoiceRouteV2);
 app.use("/product", productRoute);
 app.use(async (error, req, res, next) => {
   const status = error.statusCode || error.status || 500;

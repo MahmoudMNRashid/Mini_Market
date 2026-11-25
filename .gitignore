@@ -1,3 +1,5 @@
 node_modules
 test.js
 .env
+# صور فواتير حقيقية (فيها أرقام موردين) + نتائج التجربة
+dev-tools/invoice-samples/

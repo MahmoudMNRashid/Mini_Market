@@ -13,6 +13,11 @@ const userSchema = new Schema(
     role: { type: String, enum: ["user", "admin"], default: "user" },
     // رقم المالك التاني (OWNER_LINKED_PHONE): بيشتغل على نفس بيانات المالك
     linkedTo: { type: Schema.Types.ObjectId, ref: "UserV2", default: null },
+    // عداد قراءة الفواتير اليومي (utils/scanQuota.js)
+    invoiceScans: {
+      day: { type: String, default: null },
+      count: { type: Number, default: 0 },
+    },
   },
   { timestamps: true }
 );
