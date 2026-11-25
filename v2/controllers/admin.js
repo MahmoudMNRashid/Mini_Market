@@ -1,5 +1,8 @@
 import User from "../models/user.js";
+import Product from "../models/product.js";
 import { generateActivationCode } from "../utils/generateCode.js";
+import { httpError } from "../utils/httpError.js";
+import { buildDashboard, extendByDays, isOpenSubscription } from "../utils/account.js";
 
 // ── تفعيل / تجديد اشتراك مستخدم من الداشبورد ─────────────────────────────
 export const activateSubscription = async (req, res, next) => {
@@ -99,6 +102,56 @@ export const getAllUsers = async (req, res, next) => {
       .lean();
 
     res.status(200).json({ users });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ── الداشبورد بالتطبيق: الأرقام + الناطرين مع الكود + كل المشتركين ──────────
+export const getDashboard = async (req, res, next) => {
+  try {
+    const [users, counts] = await Promise.all([
+      User.find()
+        .select("phoneNumber activationCode subscriptionEnd isVerified role linkedTo createdAt")
+        .lean(),
+      Product.aggregate([{ $group: { _id: "$userId", count: { $sum: 1 } } }]),
+    ]);
+
+    const productCounts = Object.fromEntries(counts.map((c) => [String(c._id), c.count]));
+    res.status(200).json(buildDashboard(users, productCounts));
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ── تفعيل / تجديد بالأيام (الافتراضي 30) ──────────────────────────────────
+// إذا لسا فعّال بيمدّد من نهايته. إذا الكود محروق (منتهي) بيتولّد كود جديد ولازم ينبعتله
+export const renewSubscription = async (req, res, next) => {
+  const { phoneNumber } = req.body;
+  const days = req.body.days == null ? 30 : Number(req.body.days);
+
+  try {
+    if (!phoneNumber) throw httpError(422, "رقم الهاتف مطلوب");
+    if (!Number.isInteger(days) || days < 1 || days > 366) {
+      throw httpError(422, "عدد الأيام لازم يكون بين 1 و 366");
+    }
+
+    const user = await User.findOne({ phoneNumber });
+    if (!user) throw httpError(404, "المستخدم غير موجود");
+    if (isOpenSubscription(user)) throw httpError(409, "هاد حساب المالك، اشتراكه مفتوح");
+
+    user.subscriptionEnd = extendByDays(user.subscriptionEnd, days);
+    if (!user.activationCode) user.activationCode = generateActivationCode();
+    await user.save();
+
+    res.status(200).json({
+      message: "تم التجديد",
+      phoneNumber: user.phoneNumber,
+      subscriptionEnd: user.subscriptionEnd,
+      activationCode: user.activationCode,
+      // لسا ما دخّل الكود ← لازم ينبعتله
+      needsCode: !user.isVerified,
+    });
   } catch (error) {
     next(error);
   }

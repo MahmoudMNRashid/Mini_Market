@@ -2,6 +2,8 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/user.js";
 import { generateActivationCode } from "../utils/generateCode.js";
+import { isSubscriptionActive, publicUser } from "../utils/account.js";
+import { syncOwner } from "../utils/owner.js";
 
 export const loginOrRegister = async (req, res, next) => {
   const { phoneNumber, password } = req.body;
@@ -28,6 +30,7 @@ export const loginOrRegister = async (req, res, next) => {
       });
 
       await user.save();
+      await syncOwner(user); // رقم المالك التاني بينربط من أول تسجيل
 
       return res.status(201).json({
         message: "تم إنشاء الحساب، تواصل معنا لتفعيل الاشتراك",
@@ -44,7 +47,8 @@ export const loginOrRegister = async (req, res, next) => {
       throw error;
     }
 
-    const isActive = user.subscriptionEnd && user.subscriptionEnd > new Date();
+    await syncOwner(user);
+    const isActive = isSubscriptionActive(user);
 
     // ── الاشتراك غير نشط ──────────────────────────────────────────────────
     if (!isActive) {
@@ -86,7 +90,7 @@ export const loginOrRegister = async (req, res, next) => {
     res.status(200).json({
       message: "تم تسجيل الدخول",
       token,
-      subscriptionEnd: user.subscriptionEnd,
+      ...publicUser(user),
     });
   } catch (error) {
     next(error);
@@ -125,7 +129,8 @@ export const activate = async (req, res, next) => {
       throw error;
     }
 
-    const isActive = user.subscriptionEnd && user.subscriptionEnd > new Date();
+    await syncOwner(user);
+    const isActive = isSubscriptionActive(user);
     if (!isActive) {
       const error = new Error("اشتراكك غير مفعل بعد، يرجى التواصل معنا");
       error.statusCode = 403;
@@ -146,7 +151,7 @@ export const activate = async (req, res, next) => {
     res.status(200).json({
       message: "تم التفعيل بنجاح",
       token,
-      subscriptionEnd: user.subscriptionEnd,
+      ...publicUser(user),
     });
   } catch (error) {
     next(error);
@@ -156,8 +161,5 @@ export const activate = async (req, res, next) => {
 
 // ── بيانات المستخدم الحالي (محمي بـ checkSubscription) ─────────────────────
 export const getMe = (req, res) => {
-  res.status(200).json({
-    phoneNumber: req.user.phoneNumber,
-    subscriptionEnd: req.user.subscriptionEnd,
-  });
+  res.status(200).json(publicUser(req.user));
 };

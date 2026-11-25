@@ -774,6 +774,46 @@
           }
         },
         {
+          "name": "Dashboard (stats + pending + subscribers)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-admin-key",
+                "value": "{{adminKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v2/admin/dashboard",
+            "description": "Also accepts the owner's JWT (Authorization: Bearer) instead of x-admin-key. Owner phones (OWNER_PHONE / OWNER_LINKED_PHONE) are excluded from stats and subscribers."
+          }
+        },
+        {
+          "name": "Renew by days (+30)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-admin-key",
+                "value": "{{adminKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"{{phoneNumber}}\",\n  \"days\": 30\n}"
+            },
+            "url": "{{baseUrl}}/api/v2/admin/renew",
+            "description": "Extends from the current end if still active, else from now. Generates a new code if it was burned; needsCode=true means the user must enter it. 409 for owner accounts."
+          }
+        },
+        {
           "name": "Users list — no key (expect 401)",
           "event": [
             {
