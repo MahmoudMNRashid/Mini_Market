@@ -88,6 +88,34 @@
   .savebar { display: flex; gap: 10px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
   .savebar .grow { flex: 1; color: var(--muted); font-size: 13px; }
   .empty { color: var(--muted); font-size: 13px; padding: 10px 0; }
+
+  /* تبويبات */
+  .tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+  .tabs button { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+  .tabs button.on { background: var(--tag); color: var(--tag-ink); border-color: var(--tag); font-weight: 500; }
+
+  /* الربط */
+  select { font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; max-width: 100%; }
+  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  .toolbar input { flex: 1; min-width: 200px; }
+  .toolbar .count { color: var(--muted); font-size: 13px; }
+  .ltable { max-height: 62vh; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+  .ltable table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .ltable th { position: sticky; top: 0; background: var(--card); color: var(--muted); font-weight: 500; font-size: 12.5px; text-align: right; padding: 8px; border-bottom: 1px solid var(--line); z-index: 1; }
+  .ltable td { padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  .ltable tr:last-child td { border-bottom: 0; }
+  .ltable tbody tr { cursor: pointer; user-select: none; }
+  .ltable tbody tr:hover { background: var(--paper); }
+  .ltable tbody tr.sel { background: var(--warn-bg); }
+  .ltable .cb { width: 34px; text-align: center; }
+  .ltable .num { text-align: left; direction: ltr; white-space: nowrap; color: var(--muted); font-size: 13px; }
+  .ltable .cat { font-size: 12.5px; white-space: nowrap; }
+  .ltable .cat.none { color: var(--muted); }
+  .ltable tr.flash td { animation: flash 1.2s ease-out; }
+  @keyframes flash { from { background: var(--new-bg); } to { background: transparent; } }
+  .linkbar { position: sticky; bottom: 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; padding: 10px 12px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 -6px 18px -12px rgba(0,0,0,.35); }
+  .linkbar .grow { flex: 1; }
+  #lSel { font-weight: 500; }
 </style>
 </head>
 <body>
@@ -106,6 +134,37 @@
       <button type="submit" id="btnLogin">دخول</button>
     </form>
     <div id="loginMsg" class="msg hidden"></div>
+  </section>
+
+  <nav class="tabs hidden" id="tabs">
+    <button data-tab="entry" class="on">إدخال فئات</button>
+    <button data-tab="link">ربط بالمنتجات</button>
+  </nav>
+
+  <!-- ربط الفئات بالمنتجات -->
+  <section class="card hidden" id="link">
+    <div class="toolbar">
+      <input id="lSearch" type="search" placeholder="دوّر على منتج… (رز، علبه، مالبورو)" autocomplete="off">
+      <select id="lFilter"></select>
+      <span class="count" id="lCount"></span>
+    </div>
+    <div class="ltable">
+      <table>
+        <thead><tr>
+          <th class="cb"><input type="checkbox" id="lAll" title="حدد كل الظاهر"></th>
+          <th>المنتج</th><th>الفئة</th><th class="num">سعر الوحدة</th>
+        </tr></thead>
+        <tbody id="lRows"><tr><td colspan="4" class="empty">عم حمّل المنتجات…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="linkbar">
+      <span id="lSel">ما في شي محدد</span>
+      <button class="ghost mini" id="lClear">شيل التحديد</button>
+      <span class="grow"></span>
+      <select id="lTarget"></select>
+      <button id="lApply" disabled>اربط</button>
+    </div>
+    <div id="lMsg"></div>
   </section>
 
   <div class="grid hidden" id="main">
@@ -138,6 +197,7 @@
 
 <script type="module">
 import { parseCategoryText, planCategoryImport } from "/dev/utils/categoryImport.js";
+import { categoryIndex, categoryLabel, filterProducts } from "/dev/utils/productLink.js";
 
 const $ = (id) => document.getElementById(id);
 const API = location.origin + "/api/v2";
@@ -195,7 +255,10 @@ function logout(reason) {
   token = null;
   store.set("token", null);
   $("main").classList.add("hidden");
+  $("link").classList.add("hidden");
+  $("tabs").classList.add("hidden");
   $("who").classList.add("hidden");
+  products = null;
   $("loginCard").classList.remove("hidden");
   if (reason) showMsg($("loginMsg"), reason, "bad");
 }
@@ -203,11 +266,22 @@ $("btnLogout").onclick = () => logout();
 
 async function enter() {
   $("loginCard").classList.add("hidden");
-  $("main").classList.remove("hidden");
+  $("tabs").classList.remove("hidden");
   $("who").classList.remove("hidden");
   $("whoText").textContent = store.get("phone") || "";
+  showTab(store.get("tab") || "entry");
   await loadExisting();
 }
+
+// ── التبويبات ───────────────────────────────────────────────────────────────
+function showTab(tab) {
+  store.set("tab", tab);
+  for (const b of $("tabs").children) b.classList.toggle("on", b.dataset.tab === tab);
+  $("main").classList.toggle("hidden", tab !== "entry");
+  $("link").classList.toggle("hidden", tab !== "link");
+  if (tab === "link" && !products) loadProducts();
+}
+$("tabs").onclick = (e) => { const b = e.target.closest("[data-tab]"); if (b) showTab(b.dataset.tab); };
 
 // ── الموجود ─────────────────────────────────────────────────────────────────
 async function loadExisting() {
@@ -221,6 +295,10 @@ async function loadExisting() {
   $("existingSummary").textContent = `${existing.length} أب · ${kids} ابن · ${data.uncategorizedCount} منتج بلا فئة`;
   renderTree();
   refreshPlan();
+  catIndex = categoryIndex(existing);
+  uncategorized = data.uncategorizedCount;
+  renderCategorySelects();
+  if (products) renderRows();
 }
 
 const nodeHtml = (c) =>
@@ -351,6 +429,150 @@ function renderPlanRows() {
   $("preview").querySelector(".plan").innerHTML =
     plan.parents.map((p) => rowHtml(p, "parent") + p.children.map((c) => rowHtml(c, "child")).join("")).join("");
 }
+
+// ── ربط الفئات بالمنتجات ────────────────────────────────────────────────────
+// كل المنتجات بتنحمّل مرة وحدة (100 بالطلب)، والفلترة والبحث محلي بنفس قواعد السيرفر.
+// التحديد بيضل لو غيّرت البحث، فبتقدر تجمّع من كذا بحث وتربط مرة وحدة.
+let products = null;
+let catIndex = new Map();
+let uncategorized = 0;
+let visible = [];
+const selected = new Set();
+let lastClicked = null;
+
+// أول صفحة بتقلنا كم صفحة، والباقي بينطلبوا مع بعض (4 بنفس الوقت)
+async function loadProducts() {
+  products = [];
+  $("lRows").innerHTML = `<tr><td colspan="4" class="empty">عم حمّل المنتجات…</td></tr>`;
+  const fail = (data) => {
+    products = null;
+    $("lRows").innerHTML = `<tr><td colspan="4" class="empty">${esc(data.message || "ما قدرت حمّل المنتجات")}</td></tr>`;
+  };
+  const first = await api("GET", "/products?limit=100&page=1");
+  if (first.status !== 200) return fail(first.data);
+  const pages = [first.data.products];
+  const rest = Array.from({ length: first.data.totalPages - 1 }, (_, i) => i + 2);
+  for (let i = 0; i < rest.length; i += 4) {
+    const batch = await Promise.all(rest.slice(i, i + 4).map((p) => api("GET", `/products?limit=100&page=${p}`)));
+    const bad = batch.find((r) => r.status !== 200);
+    if (bad) return fail(bad.data);
+    batch.forEach((r, j) => (pages[i + j + 1] = r.data.products));
+    $("lRows").innerHTML = `<tr><td colspan="4" class="empty">عم حمّل المنتجات… ${Math.min((i + 5) * 100, first.data.total)} من ${first.data.total}</td></tr>`;
+  }
+  // منتج انضاف/انمحى بين الصفحات ممكن يعمل تكرار ← منشيله بالـ id
+  const seen = new Set();
+  products = pages.flat().filter((p) => !seen.has(p._id) && seen.add(p._id));
+  renderRows();
+}
+
+function renderCategorySelects() {
+  const groups = existing.map((p) =>
+    `<optgroup label="${esc(p.name)}"><option value="${p._id}">${esc(p.name)} (كلها)</option>` +
+    p.children.map((c) => `<option value="${c._id}">${esc(p.name)} ← ${esc(c.name)}</option>`).join("") + `</optgroup>`
+  ).join("");
+  const f = $("lFilter").value || store.get("filter") || "none";
+  $("lFilter").innerHTML = `<option value="all">كل المنتجات</option><option value="none">بلا فئة (${uncategorized})</option>` + groups;
+  $("lFilter").value = catIndex.has(f) || f === "all" || f === "none" ? f : "none";
+
+  const t = $("lTarget").value;
+  $("lTarget").innerHTML = `<option value="">اختار الفئة…</option>` +
+    existing.map((p) =>
+      `<optgroup label="${esc(p.name)}"><option value="${p._id}">${esc(p.name)}</option>` +
+      p.children.map((c) => `<option value="${c._id}">${esc(p.name)} ← ${esc(c.name)}</option>`).join("") + `</optgroup>`
+    ).join("") + `<option value="null">✕ فك الفئة (بلا فئة)</option>`;
+  if (t && [...$("lTarget").options].some((o) => o.value === t)) $("lTarget").value = t;
+  updateLinkBar();
+}
+
+const money = (p) => `${Number(p.wholesaleUnitPrice).toLocaleString("en-US", { maximumFractionDigits: 2 })} ${p.currency === "USD" ? "$" : "ل.س"}`;
+
+function renderRows(flashIds) {
+  if (!products) return;
+  visible = filterProducts(products, { search: $("lSearch").value, category: $("lFilter").value, index: catIndex });
+  $("lCount").textContent = `${visible.length} من ${products.length}`;
+  $("lRows").innerHTML = visible.length
+    ? visible.map((p) => {
+        const label = categoryLabel(p, catIndex);
+        const on = selected.has(p._id);
+        return `<tr data-id="${p._id}" class="${on ? "sel" : ""}${flashIds?.has(p._id) ? " flash" : ""}">` +
+          `<td class="cb"><input type="checkbox" tabindex="-1" ${on ? "checked" : ""}></td>` +
+          `<td>${esc(p.productName)}</td>` +
+          `<td class="cat ${label ? "" : "none"}">${label ? esc(label) : "—"}</td>` +
+          `<td class="num">${money(p)}</td></tr>`;
+      }).join("")
+    : `<tr><td colspan="4" class="empty">ما في منتجات هون</td></tr>`;
+  updateLinkBar();
+}
+
+function updateLinkBar() {
+  const shown = visible.filter((p) => selected.has(p._id)).length;
+  const hidden = selected.size - shown;
+  $("lSel").textContent = selected.size
+    ? `محدد ${selected.size}` + (hidden ? ` (منهن ${hidden} مش ظاهرين)` : "")
+    : "ما في شي محدد";
+  $("lApply").disabled = !selected.size || !$("lTarget").value;
+  $("lAll").checked = visible.length > 0 && shown === visible.length;
+  $("lAll").indeterminate = shown > 0 && shown < visible.length;
+}
+
+let searchTimer;
+$("lSearch").oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => renderRows(), 150); };
+$("lFilter").onchange = () => { store.set("filter", $("lFilter").value); renderRows(); };
+$("lTarget").onchange = updateLinkBar;
+$("lClear").onclick = () => { selected.clear(); renderRows(); };
+$("lAll").onchange = () => {
+  for (const p of visible) $("lAll").checked ? selected.add(p._id) : selected.delete(p._id);
+  renderRows();
+};
+
+// كبسة على السطر ← تحديد/شيل. Shift ← كل اللي بين آخر كبستين
+$("lRows").onclick = (e) => {
+  const tr = e.target.closest("tr[data-id]");
+  if (!tr) return;
+  const id = tr.dataset.id;
+  const on = !selected.has(id);
+  if (e.shiftKey && lastClicked) {
+    const a = visible.findIndex((p) => p._id === lastClicked);
+    const b = visible.findIndex((p) => p._id === id);
+    if (a !== -1 && b !== -1) {
+      for (const p of visible.slice(Math.min(a, b), Math.max(a, b) + 1)) on ? selected.add(p._id) : selected.delete(p._id);
+    }
+  } else {
+    on ? selected.add(id) : selected.delete(id);
+  }
+  lastClicked = id;
+  // تحديث خفيف بدل إعادة رسم الجدول كلو
+  for (const row of $("lRows").children) {
+    const s = selected.has(row.dataset.id);
+    row.classList.toggle("sel", s);
+    const cb = row.querySelector("input");
+    if (cb) cb.checked = s;
+  }
+  updateLinkBar();
+};
+
+$("lApply").onclick = async () => {
+  const target = $("lTarget").value;
+  if (!target || !selected.size) return;
+  const categoryId = target === "null" ? null : target;
+  const name = categoryId ? catIndex.get(categoryId)?.label : "بلا فئة";
+  if (!confirm(`تحط ${selected.size} منتج بـ «${name}»؟`)) return;
+
+  $("lApply").disabled = true;
+  const ids = [...selected];
+  const { status, data } = await api("POST", "/products/bulk-category", { productIds: ids, categoryId });
+  if (status !== 200) {
+    showMsg($("lMsg"), errText(data), "bad");
+    updateLinkBar();
+    return;
+  }
+  const set = new Set(ids);
+  for (const p of products) if (set.has(p._id)) p.categoryId = categoryId;
+  selected.clear();
+  showMsg($("lMsg"), `انحطّ ${data.matched} منتج بـ «${name}»` + (data.notFound ? ` · ${data.notFound} ما لقيتهن (يمكن انمحوا)` : ""), "ok");
+  await loadExisting(); // عدّادات الشجرة و«بلا فئة»
+  renderRows(set);
+};
 
 if (token) enter();
 </script>

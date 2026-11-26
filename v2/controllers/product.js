@@ -170,6 +170,30 @@ export const updateProduct = async (req, res, next) => {
   }
 };
 
+// ── ربط فئة بمنتجات كتير (أو null ← بلا فئة) ─────────────────────────────
+// السعر ما بيتغيّر، فلا latestWholeprice ولا سجل أسعار
+export const setCategoryBulk = async (req, res, next) => {
+  const { productIds, categoryId } = req.body;
+
+  try {
+    await assertCategoryOwned(categoryId, req.userId);
+    const ids = [...new Set(productIds)];
+    const { matchedCount, modifiedCount } = await Product.updateMany(
+      { userId: req.userId, _id: { $in: ids } },
+      { categoryId: categoryId || null }
+    );
+
+    res.status(200).json({
+      message: "تم ربط الفئة",
+      matched: matchedCount, // لقيناهن عند المستخدم
+      modified: modifiedCount, // تغيّرت فئتهن فعلاً
+      notFound: ids.length - matchedCount,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // ── حذف منتج ───────────────────────────────────────────────────────────────
 export const deleteProduct = async (req, res, next) => {
   try {

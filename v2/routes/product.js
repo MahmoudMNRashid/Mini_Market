@@ -6,6 +6,7 @@ import {
   updateProduct,
   deleteProduct,
   getPriceHistory,
+  setCategoryBulk,
 } from "../controllers/product.js";
 import { checkSubscription } from "../middleware/checkSubscription.js";
 import { validate } from "../middleware/validate.js";
@@ -24,6 +25,8 @@ const v = {
   categoryId: () => body("categoryId").optional({ values: "null" }).isMongoId()
     .withMessage("معرّف الفئة غير صالح"),
 };
+
+const BULK_MAX = 2000;
 
 const idParam = () => param("productId").isMongoId().withMessage("معرّف المنتج غير صالح");
 
@@ -46,7 +49,18 @@ const updateValidators = [
   v.categoryId(),
 ];
 
+// ربط فئة بمنتجات كتير بطلب واحد (أداة dev-tools/categories.html)
+// { productIds: [...], categoryId: <id> | null }
+const bulkCategoryValidators = [
+  body("productIds").isArray({ min: 1, max: BULK_MAX }).withMessage(`لازم تبعت بين 1 و ${BULK_MAX} منتج`),
+  body("productIds.*").isMongoId().withMessage("معرّف منتج غير صالح"),
+  // لازم ينبعت صريح: غيابه ما بيعني null (وإلا طلب ناقص بيفك فئة الكل)
+  body("categoryId").custom((val) => val === null || (typeof val === "string" && /^[a-f\d]{24}$/i.test(val)))
+    .withMessage("categoryId لازم يكون معرّف فئة أو null"),
+];
+
 router.get("/", listValidators, validate, getProducts);
+router.post("/bulk-category", bulkCategoryValidators, validate, setCategoryBulk);
 router.post("/", createValidators, validate, createProduct);
 router.patch("/:productId", updateValidators, validate, updateProduct);
 router.delete("/:productId", [idParam()], validate, deleteProduct);
