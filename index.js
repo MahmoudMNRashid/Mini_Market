@@ -4,7 +4,6 @@ dotenv.config(); // ← لازم تكون أول شي
 import { connect, app } from "./util/connect.js";
 import bodyParser from "body-parser";
 import multer from "multer";
-import express from "express";
 import { fileURLToPath } from "url";
 
 import productRoute from "./routes/product.js";
@@ -26,13 +25,18 @@ app.get("/test", async (req, res) => {
 const APK_URL = "https://github.com/MahmoudMNRashid/taseera/releases/latest/download/taseera.apk";
 app.get("/app", (req, res) => res.redirect(302, APK_URL));
 
-// أدوات محلية (dev-tools/categories.html): بالـ dev بس، ما بتنخدم على Vercel
-// (المتصفح ما بيحمّل modules من file://، فالصفحة ومنطقها بيجوا من السيرفر)
-if (process.env.NODE_ENV !== "production") {
-  const here = (p) => fileURLToPath(new URL(p, import.meta.url));
-  app.get("/dev/categories", (req, res) => res.sendFile(here("./dev-tools/categories.html")));
-  app.use("/dev/utils", express.static(here("./v2/utils"), { index: false }));
-}
+// أداة الفئات (dev-tools/categories.html): /tools/categories من أي مكان
+// الصفحة ما فيها أسرار: بدها تسجيل دخول، وكل الكتابة بتمرق من الـ API المحمي.
+// منطقها (ES modules) بيجي من السيرفر، والملفات محددة بالاسم (مش كل v2/utils).
+// Vercel: الملفات مضافة بـ includeFiles بـ vercel.json (ما حدا بيعملها import)
+const here = (p) => fileURLToPath(new URL(p, import.meta.url));
+const TOOL_FILES = ["categoryImport.js", "productLink.js", "search.js", "httpError.js"];
+app.get("/tools/categories", (req, res) => res.sendFile(here("./dev-tools/categories.html")));
+app.get("/tools/utils/:file", (req, res, next) => {
+  if (!TOOL_FILES.includes(req.params.file)) return next();
+  res.type("application/javascript").sendFile(here("./v2/utils/" + req.params.file));
+});
+app.get("/dev/categories", (req, res) => res.redirect(301, "/tools/categories")); // الرابط القديم
 
 // سجل أخطاء التطبيق: حد صغير للحجم (أكبر من هيك ← 413 قبل ما يوصل للكود)
 app.use("/api/v2/logs", bodyParser.json({ limit: "16kb" }));

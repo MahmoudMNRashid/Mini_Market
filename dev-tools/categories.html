@@ -8,7 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@400;500;700&display=swap" rel="stylesheet">
 <!--
   أداة محلية لإدخال الفئات بالجملة (خطوة 5 بـ mobile/docs/V2_MIGRATION.md)
-  بتفتح من السيرفر المحلي بس:  npm run dev  ←  http://localhost:3000/dev/categories
+  بتفتح من أي مكان: https://mini-market-lemon.vercel.app/tools/categories (أو محلياً localhost:3000/tools/categories)
   كل الكتابة بتمرق من API الفئات (POST / PATCH) بنفس تحققها.
 -->
 <style>
@@ -196,8 +196,8 @@
 </div>
 
 <script type="module">
-import { parseCategoryText, planCategoryImport } from "/dev/utils/categoryImport.js";
-import { categoryIndex, categoryLabel, filterProducts } from "/dev/utils/productLink.js";
+import { parseCategoryText, planCategoryImport } from "/tools/utils/categoryImport.js";
+import { categoryIndex, categoryLabel, filterProducts } from "/tools/utils/productLink.js";
 
 const $ = (id) => document.getElementById(id);
 const API = location.origin + "/api/v2";
@@ -265,6 +265,12 @@ function logout(reason) {
 $("btnLogout").onclick = () => logout();
 
 async function enter() {
+  // الأداة للأدمن بس (بالواجهة؛ السيرفر أصلاً ما بيخلي حدا يلمس غير داتاه)
+  const me = await api("GET", "/auth/me");
+  if (!token) return; // التوكن خلص ← api طلّعنا
+  if (me.status !== 200 || !me.data.isAdmin) {
+    return logout(me.status === 200 ? "هالأداة لحساب الأدمن بس" : me.data.message || "ما زبط التحقق من الحساب");
+  }
   $("loginCard").classList.add("hidden");
   $("tabs").classList.remove("hidden");
   $("who").classList.remove("hidden");
