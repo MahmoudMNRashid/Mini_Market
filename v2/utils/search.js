@@ -1,7 +1,7 @@
 import { escapeRegex } from "./httpError.js";
 
 // حروف بتنكتب بأكتر من شكل ← أي شكل منها بيطابق التاني
-const GROUPS = [
+export const GROUPS = [
   "اأإآٱ",
   "ةه",
   "ىيیئ",
@@ -12,7 +12,7 @@ const GROUPS = [
 
 // تشكيل + تطويل (ـ): بنشيلهم من البحث وبنسمح فيهم بين حروف الاسم
 // (الحروف نفسها مش \uXXXX، لأنو MongoDB (PCRE2) ما بيدعم \u)
-const DIACRITICS = /[ً-ٰٟـ]/g;
+export const DIACRITICS = /[ً-ٰٟـ]/g;
 const OPTIONAL_DIACRITICS = "[ً-ٰٟـ]*";
 
 const charPattern = (ch) => {

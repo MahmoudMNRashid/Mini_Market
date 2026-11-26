@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>تسعيرة · الفئات</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@400;500;700&display=swap" rel="stylesheet">
+<!--
+  أداة محلية لإدخال الفئات بالجملة (خطوة 5 بـ mobile/docs/V2_MIGRATION.md)
+  بتفتح من السيرفر المحلي بس:  npm run dev  ←  http://localhost:3000/dev/categories
+  كل الكتابة بتمرق من API الفئات (POST / PATCH) بنفس تحققها.
+-->
+<style>
+  :root {
+    --paper: #f6f1e7; --card: #fffdf8; --ink: #1f1a14; --muted: #7a6f60; --line: #e6dccb;
+    --tag: #f5c84b; --tag-ink: #3b2c00;
+    --new: #1f7a3d; --new-bg: #e5f4e9; --exists: #8a8073; --exists-bg: #efeae1;
+    --bad: #b3261e; --bad-bg: #fbe7e5; --warn: #9a5b00; --warn-bg: #fdf1dc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #17140f; --card: #211d16; --ink: #f1ebdf; --muted: #a89c88; --line: #3a3328;
+      --tag: #e8b931; --tag-ink: #2a1f00;
+      --new: #6fd391; --new-bg: #1b3324; --exists: #a39a8b; --exists-bg: #2a261f;
+      --bad: #ff8a80; --bad-bg: #3a1f1c; --warn: #ffc266; --warn-bg: #3a2c14;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.6 "Readex Pro", Tahoma, sans-serif; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 20px 16px 60px; }
+  header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+  h1 { margin: 0; font-size: 22px; font-weight: 700; }
+  .tag { background: var(--tag); color: var(--tag-ink); padding: 2px 12px 2px 16px; font-weight: 700;
+         clip-path: polygon(10px 0, 100% 0, 100% 100%, 10px 100%, 0 50%); }
+  .who { margin-inline-start: auto; color: var(--muted); font-size: 13px; display: flex; gap: 8px; align-items: center; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  .card h2 { margin: 0 0 10px; font-size: 15px; font-weight: 500; display: flex; gap: 8px; align-items: baseline; }
+  .card h2 small { color: var(--muted); font-weight: 400; font-size: 12px; }
+  .grid { display: grid; grid-template-columns: 340px 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  input, textarea { font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; width: 100%; }
+  textarea { min-height: 260px; resize: vertical; line-height: 1.9; tab-size: 4; white-space: pre; }
+  input:focus, textarea:focus { outline: 2px solid var(--tag); outline-offset: 1px; }
+  button { font: inherit; border: 0; border-radius: 10px; padding: 9px 16px; cursor: pointer; background: var(--ink); color: var(--paper); }
+  button.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+  button.mini { padding: 2px 8px; font-size: 12px; border-radius: 6px; }
+  button:disabled { opacity: .45; cursor: default; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .row > label { flex: 1; min-width: 150px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+  .hidden { display: none !important; }
+  .msg { margin-top: 10px; font-size: 13px; padding: 8px 12px; border-radius: 10px; }
+  .msg.bad { background: var(--bad-bg); color: var(--bad); }
+  .msg.ok { background: var(--new-bg); color: var(--new); }
+  .hint { color: var(--muted); font-size: 12.5px; margin: 6px 0 10px; }
+  .hint code { background: var(--paper); padding: 0 5px; border-radius: 4px; }
+
+  /* شجرة الموجود */
+  ul.tree { list-style: none; margin: 0; padding: 0; }
+  ul.tree > li { padding: 6px 0; border-bottom: 1px dashed var(--line); }
+  ul.tree > li:last-child { border-bottom: 0; }
+  ul.tree ul { list-style: none; margin: 2px 0 0; padding: 0 18px 0 0; border-right: 2px solid var(--line); }
+  ul.tree ul li { padding: 2px 10px 2px 0; font-size: 14px; }
+  .node { display: flex; gap: 8px; align-items: center; }
+  .node .n { flex: 1; }
+  .count { color: var(--muted); font-size: 12px; }
+  .node .mini { opacity: 0; transition: opacity .15s; }
+  .node:hover .mini, .node .mini:focus { opacity: 1; }
+  @media (hover: none) { .node .mini { opacity: 1; } }
+
+  /* المعاينة */
+  .stats { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+  .chip { padding: 2px 10px; border-radius: 99px; font-size: 13px; }
+  .s-new { background: var(--new-bg); color: var(--new); }
+  .s-exists { background: var(--exists-bg); color: var(--exists); }
+  .s-conflict, .s-error, .s-failed { background: var(--bad-bg); color: var(--bad); }
+  .s-note { background: var(--warn-bg); color: var(--warn); }
+  .s-done { background: var(--new-bg); color: var(--new); }
+  .plan { list-style: none; margin: 0; padding: 0; }
+  .plan li { display: flex; gap: 8px; align-items: center; padding: 4px 8px; border-radius: 8px; }
+  .plan li.child { margin-right: 22px; }
+  .plan li .ln { color: var(--muted); font-size: 11px; min-width: 34px; direction: ltr; text-align: left; }
+  .plan li .n { flex: 1; }
+  .plan li .why { font-size: 12px; color: var(--muted); }
+  .plan li.parent .n { font-weight: 500; }
+  .issues { list-style: none; padding: 0; margin: 0 0 10px; font-size: 13px; }
+  .issues li { padding: 3px 10px; border-radius: 8px; margin-bottom: 4px; }
+  .savebar { display: flex; gap: 10px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
+  .savebar .grow { flex: 1; color: var(--muted); font-size: 13px; }
+  .empty { color: var(--muted); font-size: 13px; padding: 10px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>الفئات</h1><span class="tag">تسعيرة</span>
+    <div class="who hidden" id="who"><span id="whoText"></span><button class="ghost mini" id="btnLogout">طلوع</button></div>
+  </header>
+
+  <!-- تسجيل الدخول -->
+  <section class="card" id="loginCard">
+    <h2>تسجيل الدخول <small>بحساب المالك، متل التطبيق</small></h2>
+    <form class="row" id="loginForm">
+      <label>رقم الموبايل <input id="phone" inputmode="tel" autocomplete="username" placeholder="09XXXXXXXX"></label>
+      <label>كلمة السر <input id="password" type="password" autocomplete="current-password"></label>
+      <button type="submit" id="btnLogin">دخول</button>
+    </form>
+    <div id="loginMsg" class="msg hidden"></div>
+  </section>
+
+  <div class="grid hidden" id="main">
+    <!-- الموجود -->
+    <section class="card">
+      <h2>الموجود هلق <small id="existingSummary"></small></h2>
+      <ul class="tree" id="tree"></ul>
+      <div class="row" style="margin-top:10px"><button class="ghost mini" id="btnReload">تحديث</button></div>
+    </section>
+
+    <!-- الإدخال + المعاينة -->
+    <section class="card">
+      <h2>فئات جديدة</h2>
+      <p class="hint">
+        الأب بأول السطر، وأبناؤه تحته وقبل كل واحد مسافة أو <code>Tab</code>. أو الصق عمودين من إكسل (الأب ⇥ الابن)، وخانة الأب الفاضية بتعني نفس الأب اللي فوقها.
+        <code>#</code> بأول السطر تعليق. اللي موجود أصلاً (حتى لو بـ «ال» أو ة/ه مختلفة) بينتجاوز.
+      </p>
+      <textarea id="input" spellcheck="false" placeholder="حبوب&#10;    عدس&#10;معلبات&#10;    تونة&#10;    فول وحمص"></textarea>
+
+      <div id="preview"></div>
+
+      <div class="savebar">
+        <span class="grow" id="saveHint">اكتب شي لتشوف المعاينة</span>
+        <button id="btnSave" disabled>احفظ الجديد</button>
+      </div>
+      <div id="report"></div>
+    </section>
+  </div>
+</div>
+
+<script type="module">
+import { parseCategoryText, planCategoryImport } from "/dev/utils/categoryImport.js";
+
+const $ = (id) => document.getElementById(id);
+const API = location.origin + "/api/v2";
+const store = {
+  get: (k) => { try { return localStorage.getItem("cat-tool:" + k); } catch { return null; } },
+  set: (k, v) => { try { v == null ? localStorage.removeItem("cat-tool:" + k) : localStorage.setItem("cat-tool:" + k, v); } catch {} },
+};
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+let token = store.get("token");
+let existing = [];
+let plan = null;
+let saving = false;
+
+async function api(method, path, body) {
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = "Bearer " + token;
+  let res;
+  try {
+    res = await fetch(API + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  } catch {
+    return { status: 0, data: { message: "السيرفر مو شغال؟ (npm run dev)" } };
+  }
+  const data = await res.json().catch(() => ({}));
+  if ((res.status === 401 || res.status === 403) && token && !path.startsWith("/auth/login")) logout(data.message);
+  return { status: res.status, data };
+}
+
+function showMsg(el, text, kind) {
+  el.textContent = text;
+  el.className = "msg " + kind;
+}
+
+// ── دخول / طلوع ─────────────────────────────────────────────────────────────
+$("phone").value = store.get("phone") || "";
+$("loginForm").onsubmit = async (e) => {
+  e.preventDefault();
+  $("btnLogin").disabled = true;
+  const phoneNumber = $("phone").value.trim();
+  const { status, data } = await api("POST", "/auth/login", { phoneNumber, password: $("password").value });
+  $("btnLogin").disabled = false;
+  if (status === 200 && data.token) {
+    token = data.token;
+    store.set("token", token);
+    store.set("phone", phoneNumber);
+    $("password").value = "";
+    $("loginMsg").classList.add("hidden");
+    enter();
+  } else {
+    showMsg($("loginMsg"), data.message || "ما زبط الدخول", "bad");
+  }
+};
+
+function logout(reason) {
+  token = null;
+  store.set("token", null);
+  $("main").classList.add("hidden");
+  $("who").classList.add("hidden");
+  $("loginCard").classList.remove("hidden");
+  if (reason) showMsg($("loginMsg"), reason, "bad");
+}
+$("btnLogout").onclick = () => logout();
+
+async function enter() {
+  $("loginCard").classList.add("hidden");
+  $("main").classList.remove("hidden");
+  $("who").classList.remove("hidden");
+  $("whoText").textContent = store.get("phone") || "";
+  await loadExisting();
+}
+
+// ── الموجود ─────────────────────────────────────────────────────────────────
+async function loadExisting() {
+  const { status, data } = await api("GET", "/categories");
+  if (status !== 200) {
+    $("tree").innerHTML = `<li class="empty">${esc(data.message || "ما قدرت جيب الفئات")}</li>`;
+    return;
+  }
+  existing = data.categories;
+  const kids = existing.reduce((n, p) => n + p.children.length, 0);
+  $("existingSummary").textContent = `${existing.length} أب · ${kids} ابن · ${data.uncategorizedCount} منتج بلا فئة`;
+  renderTree();
+  refreshPlan();
+}
+
+const nodeHtml = (c) =>
+  `<div class="node"><span class="n">${esc(c.name)}</span><span class="count">${c.productCount || ""}</span>` +
+  `<button class="ghost mini" data-rename="${c._id}" data-name="${esc(c.name)}" title="تغيير الاسم">✎</button></div>`;
+
+function renderTree() {
+  $("tree").innerHTML = existing.length
+    ? existing.map((p) => `<li>${nodeHtml(p)}${p.children.length ? `<ul>${p.children.map((c) => `<li>${nodeHtml(c)}</li>`).join("")}</ul>` : ""}</li>`).join("")
+    : `<li class="empty">ما في فئات لسا</li>`;
+}
+
+$("tree").onclick = async (e) => {
+  const btn = e.target.closest("[data-rename]");
+  if (!btn) return;
+  const old = btn.dataset.name;
+  const name = prompt(`الاسم الجديد لـ «${old}»:`, old)?.trim();
+  if (!name || name === old) return;
+  const { status, data } = await api("PATCH", "/categories/" + btn.dataset.rename, { name });
+  if (status !== 200) return alert(data.data?.[0]?.message || data.message || "ما زبط");
+  await loadExisting();
+};
+$("btnReload").onclick = loadExisting;
+
+// ── المعاينة ────────────────────────────────────────────────────────────────
+const LABEL = { new: "جديد", exists: "موجود", conflict: "تعارض", done: "انضاف", failed: "فشل" };
+let parsed = null;
+
+$("input").value = store.get("draft") || "";
+let timer;
+$("input").oninput = () => {
+  clearTimeout(timer);
+  timer = setTimeout(() => { store.set("draft", $("input").value); refreshPlan(); }, 200);
+};
+// Tab جوا المربع بيكتب Tab بدل ما ينقل لزر تاني
+$("input").onkeydown = (e) => {
+  if (e.key !== "Tab" || e.shiftKey) return;
+  e.preventDefault();
+  document.execCommand("insertText", false, "\t");
+};
+
+function refreshPlan() {
+  if (saving) return;
+  const text = $("input").value;
+  if (!text.trim()) {
+    parsed = plan = null;
+    $("preview").innerHTML = "";
+    $("btnSave").disabled = true;
+    $("saveHint").textContent = "اكتب شي لتشوف المعاينة";
+    return;
+  }
+  parsed = parseCategoryText(text);
+  plan = planCategoryImport(parsed, existing);
+  renderPlan();
+}
+
+const rowHtml = (r, cls) =>
+  `<li class="${cls}"><span class="ln">${r.line}</span><span class="n">${esc(r.name)}` +
+  (r.existingName && r.existingName !== r.name ? ` <span class="why">= «${esc(r.existingName)}»</span>` : "") +
+  `</span>${r.note ? `<span class="why">${esc(r.note)}</span>` : ""}<span class="chip s-${r.status}">${LABEL[r.status]}</span></li>`;
+
+function renderPlan() {
+  const { counts } = plan;
+  const issues = [
+    ...parsed.errors.map((x) => `<li class="s-error">سطر ${x.line}: ${esc(x.message)} (ما رح ينضاف)</li>`),
+    ...parsed.notes.map((x) => `<li class="s-note">سطر ${x.line}: ${esc(x.message)}</li>`),
+  ].join("");
+  $("preview").innerHTML =
+    `<div class="stats"><span class="chip s-new">${counts.new} جديد</span><span class="chip s-exists">${counts.exists} موجود</span>` +
+    (counts.conflict ? `<span class="chip s-conflict">${counts.conflict} تعارض</span>` : "") +
+    (parsed.errors.length ? `<span class="chip s-error">${parsed.errors.length} غلط</span>` : "") + `</div>` +
+    (issues ? `<ul class="issues">${issues}</ul>` : "") +
+    `<ul class="plan">${plan.parents.map((p) => rowHtml(p, "parent") + p.children.map((c) => rowHtml(c, "child")).join("")).join("")}</ul>`;
+  $("btnSave").disabled = counts.new === 0;
+  $("saveHint").textContent = counts.new
+    ? `رح ينضاف ${counts.new} فئة، والباقي ما بينلمس`
+    : "ما في شي جديد للحفظ";
+}
+
+// ── الحفظ ───────────────────────────────────────────────────────────────────
+// الآباء الجداد أول (لناخد الـ id)، بعدين أبناؤهم. واحد ورا التاني، وكل وحدة إلها نتيجة.
+const errText = (data) => data.data?.[0]?.message || data.message || "خطأ";
+
+$("btnSave").onclick = async () => {
+  if (!plan || !confirm(`تضيف ${plan.counts.new} فئة جديدة لحساب ${store.get("phone") || ""}؟`)) return;
+  saving = true;
+  $("btnSave").disabled = true;
+  $("input").readOnly = true;
+  const result = { done: 0, failed: 0 };
+
+  for (const p of plan.parents) {
+    if (p.status === "conflict") continue;
+    let parentId = p.id;
+    if (p.status === "new") {
+      $("saveHint").textContent = `عم ضيف «${p.name}»…`;
+      const { status, data } = await api("POST", "/categories", { name: p.name });
+      if (status === 201) { parentId = data.category._id; p.status = "done"; result.done++; }
+      else { p.status = "failed"; p.note = errText(data); result.failed++; }
+      renderPlanRows();
+    }
+    for (const c of p.children) {
+      if (c.status !== "new") continue;
+      if (!parentId) { c.status = "failed"; c.note = "أبوها ما انضاف"; result.failed++; continue; }
+      const { status, data } = await api("POST", "/categories", { name: c.name, parentId });
+      if (status === 201) { c.status = "done"; result.done++; }
+      else { c.status = "failed"; c.note = errText(data); result.failed++; }
+      renderPlanRows();
+    }
+    if (!token) break; // انطرد (توكن خلص)
+  }
+
+  saving = false;
+  $("input").readOnly = false;
+  $("report").innerHTML = `<div class="msg ${result.failed ? "bad" : "ok"}">انضاف ${result.done}` +
+    (result.failed ? ` · فشل ${result.failed} (شوف الأحمر فوق)` : "") + ` · ${plan.counts.exists} كانت موجودة وما انلمست</div>`;
+  $("saveHint").textContent = "خلص. بتقدر تفضّي المربع أو تعدّل وتحفظ مرة تانية (اللي انضاف ما بيتكرر)";
+  await loadExistingKeepPlan();
+};
+
+// بعد الحفظ: منحدّث الشجرة بس منخلي نتيجة الحفظ ظاهرة لحد ما يعدّل بالمربع
+async function loadExistingKeepPlan() {
+  saving = true;
+  await loadExisting();
+  saving = false;
+}
+
+function renderPlanRows() {
+  $("preview").querySelector(".plan").innerHTML =
+    plan.parents.map((p) => rowHtml(p, "parent") + p.children.map((c) => rowHtml(c, "child")).join("")).join("");
+}
+
+if (token) enter();
+</script>
+</body>
+</html>

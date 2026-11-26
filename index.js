@@ -4,6 +4,8 @@ dotenv.config(); // ← لازم تكون أول شي
 import { connect, app } from "./util/connect.js";
 import bodyParser from "body-parser";
 import multer from "multer";
+import express from "express";
+import { fileURLToPath } from "url";
 
 import productRoute from "./routes/product.js";
 import authRouteV2 from "./v2/routes/auth.js";
@@ -23,6 +25,14 @@ app.get("/test", async (req, res) => {
 // (كل نسخة جديدة: release جديد بنفس اسم الملف taseera.apk، والرابط ما بيتغير)
 const APK_URL = "https://github.com/MahmoudMNRashid/taseera/releases/latest/download/taseera.apk";
 app.get("/app", (req, res) => res.redirect(302, APK_URL));
+
+// أدوات محلية (dev-tools/categories.html): بالـ dev بس، ما بتنخدم على Vercel
+// (المتصفح ما بيحمّل modules من file://، فالصفحة ومنطقها بيجوا من السيرفر)
+if (process.env.NODE_ENV !== "production") {
+  const here = (p) => fileURLToPath(new URL(p, import.meta.url));
+  app.get("/dev/categories", (req, res) => res.sendFile(here("./dev-tools/categories.html")));
+  app.use("/dev/utils", express.static(here("./v2/utils"), { index: false }));
+}
 
 // سجل أخطاء التطبيق: حد صغير للحجم (أكبر من هيك ← 413 قبل ما يوصل للكود)
 app.use("/api/v2/logs", bodyParser.json({ limit: "16kb" }));
