@@ -72,8 +72,51 @@ describe("buildSearch", () => {
 
   it("ما في \\u بالـ patterns (MongoDB PCRE2 ما بيدعمها)", () => {
     const s = buildSearch("أرز البسمتي ٥");
-    for (const p of [...s.filter.map((f) => f.productName.$regex), s.prefix, s.phrase]) {
+    for (const p of [...s.filter.map((f) => f.productName.$regex), ...s.strict, s.prefix, s.phrase]) {
       assert.equal(p.includes("\\u"), false);
     }
+  });
+});
+
+describe("buildSearch: تسامح بحروف المد (ا و ي ى)", () => {
+  it("حرف مد زيادة بالاسم", () => {
+    assert.equal(matches("ليبرس", "شامبو ليبيرس"), true);
+    assert.equal(matches("نسكافه", "نسكافيه غولد"), true);
+    assert.equal(matches("بسمتي", "رز بسماتي"), true);
+    assert.equal(matches("شامبو", "شامبوو"), true);
+  });
+
+  it("حرف مد واحد من البحث ناقص بالاسم", () => {
+    assert.equal(matches("ليبيرس", "ليبرس"), true);
+    assert.equal(matches("بيبسي", "ببسي"), true);
+    assert.equal(matches("مالبورو", "ملبورو"), true);
+  });
+
+  it("بس واحد: حرفين مد ناقصين ← ما بيطابق", () => {
+    assert.equal(matches("ليمون", "لمن"), false);
+    assert.equal(matches("مالبورو", "ملبرو"), false);
+  });
+
+  it("كلمة أقل من 4 حروف ← دقيقة متل قبل", () => {
+    assert.equal(matches("رز", "روز"), false);
+    assert.equal(matches("شبس", "شيبس"), false);
+    assert.equal(matches("الرز", "روز"), false); // بعد شيل "ال" صارت حرفين
+  });
+
+  it("الأرقام والإنكليزي ما بيتأثروا", () => {
+    assert.equal(matches("1000", "1o0o0"), false);
+    assert.equal(matches("pepsi", "pepasi"), false);
+  });
+
+  it("strict: نفس الكلمات بلا تسامح (للترتيب)", () => {
+    const s = buildSearch("ليبرس");
+    assert.equal(s.strict.length, 1);
+    assert.equal(new RegExp(s.strict[0], "i").test("ليبرس"), true);
+    assert.equal(new RegExp(s.strict[0], "i").test("ليبيرس"), false);
+  });
+
+  it("كلمة طويلة كتير ← الـ regex محدود", () => {
+    const s = buildSearch("ي".repeat(500));
+    assert.ok(s.filter[0].productName.$regex.length < 5000);
   });
 });

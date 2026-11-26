@@ -45,7 +45,7 @@ export const getProducts = async (req, res, next) => {
       if (!category) throw httpError(404, "الفئة غير موجودة");
 
       if (!category.parent) {
-        const children = await Category.find({ parent: category._id }).select("_id").lean();
+        const children = await Category.find({ userId: req.userId, parent: category._id }).select("_id").lean(); // userId ← بيستعمل الـ index
         filter.categoryId = { $in: [category._id, ...children.map((c) => c._id)] };
       } else {
         filter.categoryId = category._id;
@@ -55,13 +55,21 @@ export const getProducts = async (req, res, next) => {
     let products, total;
 
     if (s) {
-      // ترتيب حسب الصلة: بيبلّش بأول كلمة (2) + الكلمات متتالية بنفس الترتيب (1)، بعدين أبجدي
+      // ترتيب حسب الصلة: كل الكلمات حرفياً بلا تسامح حروف المد (3) + بيبلّش بأول كلمة (2)
+      // + الكلمات متتالية بنفس الترتيب (1)، بعدين أبجدي
       const [result] = await Product.aggregate([
         { $match: filter },
         {
           $addFields: {
             _score: {
               $add: [
+                {
+                  $cond: [
+                    { $and: s.strict.map((regex) => ({ $regexMatch: { input: "$productName", regex, options: "i" } })) },
+                    3,
+                    0,
+                  ],
+                },
                 { $cond: [{ $regexMatch: { input: "$productName", regex: s.prefix, options: "i" } }, 2, 0] },
                 { $cond: [{ $regexMatch: { input: "$productName", regex: s.phrase, options: "i" } }, 1, 0] },
               ],
