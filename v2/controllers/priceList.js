@@ -1,28 +1,26 @@
 import Product from "../models/product.js";
 import Category from "../models/category.js";
 import { httpError } from "../utils/httpError.js";
+import { roundSyp, ceilSyp } from "../utils/priceRound.js";
 
 export const DEFAULT_MARGIN = 12.5; // نسبة الربح الافتراضية لقائمة الزبائن (%)
 
-const round100 = (n) => Math.round(n / 100) * 100;
-const ceil100 = (n) => Math.ceil(n / 100) * 100;
-
-// بالليرة: سعر الطرد المسجّل بالليرة بيضل متل ما هو، أي شي محوّل أو مقسوم بيتقرّب لأقرب 100
+// بالليرة: سعر الطرد المسجّل بالليرة بيضل متل ما هو، أي شي محوّل أو مقسوم بيتقرّب بخطوة على قد السعر (utils/priceRound.js)
 const wholesaleRow = (p, rate) => {
   const toSyp = (n) => (p.currency === "USD" ? n * rate : n);
   return {
     _id: p._id,
     productName: p.productName,
     unitsPerPackage: p.unitsPerPackage,
-    packagePrice: p.currency === "USD" ? round100(toSyp(p.wholesalePackagePrice)) : p.wholesalePackagePrice,
-    unitPrice: round100(toSyp(p.wholesalePackagePrice / p.unitsPerPackage)),
+    packagePrice: p.currency === "USD" ? roundSyp(toSyp(p.wholesalePackagePrice)) : p.wholesalePackagePrice,
+    unitPrice: roundSyp(toSyp(p.wholesalePackagePrice / p.unitsPerPackage)),
   };
 };
 
 // سعر المبيع للوحدة = سعر الجملة للوحدة + الربح، بيتقرّب لفوق (ما منبيع تحت نسبة الربح)
 const retailRow = (p, rate, margin) => {
   const unitSyp = (p.wholesalePackagePrice / p.unitsPerPackage) * (p.currency === "USD" ? rate : 1);
-  return { _id: p._id, productName: p.productName, price: ceil100(unitSyp * (1 + margin / 100)) };
+  return { _id: p._id, productName: p.productName, price: ceilSyp(unitSyp * (1 + margin / 100)) };
 };
 
 const escapeHtml = (s) =>
@@ -47,7 +45,7 @@ export const getPriceList = async (req, res, next) => {
 
     const children = category.parent
       ? []
-      : await Category.find({ parent: category._id }).sort({ name: 1 }).lean();
+      : await Category.find({ userId: req.userId, parent: category._id }).sort({ name: 1 }).lean();
 
     const allCategoryIds = [category._id, ...children.map((c) => c._id)];
     const products = await Product.find({ userId: req.userId, categoryId: { $in: allCategoryIds } })
