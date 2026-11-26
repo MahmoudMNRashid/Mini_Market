@@ -1,8 +1,17 @@
 import mongoose from "mongoose";
 import Product from "../models/product.js";
 import Category from "../models/category.js";
+import PriceHistory from "../models/priceHistory.js";
 import { httpError, isDuplicateKey } from "../utils/httpError.js";
 import { buildSearch } from "../utils/search.js";
+import {
+  HISTORY_LIMIT,
+  priceChanged as didPriceChange,
+  priceEntry,
+  recordNewPrice,
+  recordPriceChange,
+  safely,
+} from "../utils/priceHistory.js";
 
 const DUPLICATE_MSG = "في منتج بنفس الاسم";
 
@@ -113,6 +122,7 @@ export const createProduct = async (req, res, next) => {
       latestWholeprice: new Date(),
       categoryId: categoryId || null,
     });
+    await safely(() => recordNewPrice(req.userId, product, "manual"));
 
     const { userId, __v, ...data } = product.toObject();
     res.status(201).json({ message: "تمت إضافة المنتج", product: data });
@@ -136,10 +146,9 @@ export const updateProduct = async (req, res, next) => {
       await assertCategoryOwned(req.body.categoryId, req.userId);
     }
 
-    const priceFields = ["wholesalePackagePrice", "unitsPerPackage", "currency"];
-    const priceChanged = priceFields.some(
-      (f) => req.body[f] !== undefined && req.body[f] !== product[f]
-    );
+    const priceChanged = didPriceChange(product, req.body);
+    // نسخة السعر القديم قبل ما نغيّر (للسجل)
+    const before = priceChanged ? priceEntry(req.userId, product, null) : null;
 
     for (const f of fields) {
       if (req.body[f] !== undefined) product[f] = f === "categoryId" ? req.body[f] || null : req.body[f];
@@ -151,6 +160,7 @@ export const updateProduct = async (req, res, next) => {
     }
 
     await product.save();
+    if (priceChanged) await safely(() => recordPriceChange(req.userId, before, product, "manual"));
 
     const { userId, __v, ...data } = product.toObject();
     res.status(200).json({ message: "تم تعديل المنتج", product: data });
@@ -165,8 +175,28 @@ export const deleteProduct = async (req, res, next) => {
   try {
     const product = await Product.findOneAndDelete({ _id: req.params.productId, userId: req.userId });
     if (!product) throw httpError(404, "المنتج غير موجود");
+    await safely(() => PriceHistory.deleteMany({ userId: req.userId, productId: product._id }));
 
     res.status(200).json({ message: "تم حذف المنتج", productId: product._id });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ── سجل أسعار منتج (الأحدث أول) ───────────────────────────────────────────
+// فاضي ← المنتج ما تغيّر سعره من وقت ما بلّش السجل (التطبيق بيعرض السعر الحالي بس)
+export const getPriceHistory = async (req, res, next) => {
+  try {
+    const exists = await Product.exists({ _id: req.params.productId, userId: req.userId });
+    if (!exists) throw httpError(404, "المنتج غير موجود");
+
+    const history = await PriceHistory.find({ userId: req.userId, productId: req.params.productId })
+      .sort({ at: -1, _id: -1 })
+      .limit(HISTORY_LIMIT)
+      .select("wholesalePackagePrice unitsPerPackage wholesaleUnitPrice currency at source")
+      .lean();
+
+    res.status(200).json({ history });
   } catch (error) {
     next(error);
   }

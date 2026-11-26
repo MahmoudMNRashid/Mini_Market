@@ -3,6 +3,7 @@ import User from "../models/user.js";
 import { httpError } from "../utils/httpError.js";
 import { dataOwnerId, isSubscriptionActive } from "../utils/account.js";
 import { syncOwner } from "../utils/owner.js";
+import { isTokenStale } from "../utils/password.js";
 
 // بيقرا الـ Bearer token وبيجيب المستخدم من الـ DB (مع مطابقة المالك من الـ env)
 // بيرمي 401 إذا ما في توكن، أو غلط، أو المستخدم انمسح
@@ -20,6 +21,10 @@ export const userFromToken = async (req) => {
 
   const user = await User.findById(decoded.userId);
   if (!user) throw httpError(401, "المستخدم غير موجود");
+  // كلمة السر تغيّرت بعد ما انطلع هالتوكن (من جهاز تاني أو مؤقتة من الأدمن)
+  if (isTokenStale(decoded.iat, user.passwordChangedAt)) {
+    throw httpError(401, "تغيّرت كلمة السر، ادخل من جديد");
+  }
 
   return syncOwner(user);
 };

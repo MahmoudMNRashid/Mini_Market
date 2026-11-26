@@ -82,7 +82,9 @@ describe("الاشتراك", () => {
       subscriptionEnd: null,
       isAdmin: true,
       openSubscription: true,
+      mustChangePassword: false,
     });
+    assert.equal(publicUser({ phoneNumber: "0934000000", mustChangePassword: true }).mustChangePassword, true);
   });
 });
 

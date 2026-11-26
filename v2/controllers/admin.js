@@ -1,8 +1,10 @@
+import bcrypt from "bcryptjs";
 import User from "../models/user.js";
 import Product from "../models/product.js";
 import { generateActivationCode } from "../utils/generateCode.js";
 import { httpError } from "../utils/httpError.js";
-import { buildDashboard, extendByDays, isOpenSubscription } from "../utils/account.js";
+import { buildDashboard, extendByDays, isAdmin, isOpenSubscription } from "../utils/account.js";
+import { generateTempPassword } from "../utils/password.js";
 
 // ── تفعيل / تجديد اشتراك مستخدم من الداشبورد ─────────────────────────────
 export const activateSubscription = async (req, res, next) => {
@@ -119,6 +121,30 @@ export const getDashboard = async (req, res, next) => {
 
     const productCounts = Object.fromEntries(counts.map((c) => [String(c._id), c.count]));
     res.status(200).json(buildDashboard(users, productCounts));
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ── كلمة سر مؤقتة لمستخدم نسي كلمة سره (الأدمن بيبعتها عالواتساب) ──────
+// بتطلّع كل أجهزته، وأول ما يفوت فيها التطبيق بيجبره يحط وحدة جديدة
+export const resetPassword = async (req, res, next) => {
+  const { phoneNumber } = req.body;
+
+  try {
+    if (!phoneNumber) throw httpError(422, "رقم الهاتف مطلوب");
+    const user = await User.findOne({ phoneNumber });
+    if (!user) throw httpError(404, "المستخدم غير موجود");
+    // حساب المالك ما بينعمله reset من التطبيق (لو حدا وصل لتوكن الأدمن ما بيسكّر المالك برّا)
+    if (isAdmin(user)) throw httpError(409, "هاد حساب المالك، غيّر كلمة سره من الإعدادات");
+
+    const tempPassword = generateTempPassword();
+    user.password = await bcrypt.hash(tempPassword, 12);
+    user.mustChangePassword = true;
+    user.passwordChangedAt = new Date();
+    await user.save();
+
+    res.status(200).json({ message: "انعملت كلمة سر مؤقتة", phoneNumber: user.phoneNumber, tempPassword });
   } catch (error) {
     next(error);
   }

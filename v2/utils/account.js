@@ -48,6 +48,7 @@ export const publicUser = (user) => ({
   subscriptionEnd: user.subscriptionEnd,
   isAdmin: isAdmin(user),
   openSubscription: isOpenSubscription(user),
+  mustChangePassword: !!user.mustChangePassword,
 });
 
 // الأيام الباقية (تقريب لفوق: باقي ساعات = يوم)، 0 إذا خلص أو ما انفعّل

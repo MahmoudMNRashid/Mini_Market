@@ -4,6 +4,11 @@ import User from "../models/user.js";
 import { generateActivationCode } from "../utils/generateCode.js";
 import { isSubscriptionActive, publicUser } from "../utils/account.js";
 import { syncOwner } from "../utils/owner.js";
+import { httpError } from "../utils/httpError.js";
+import { newPasswordError } from "../utils/password.js";
+
+const signToken = (user) =>
+  jwt.sign({ userId: user._id.toString() }, process.env.JWT_SECRET, { expiresIn: "30d" });
 
 export const loginOrRegister = async (req, res, next) => {
   const { phoneNumber, password } = req.body;
@@ -158,6 +163,36 @@ export const activate = async (req, res, next) => {
   }
 };
 
+
+// ── تغيير كلمة السر (من الإعدادات، أو إجباري بعد كلمة سر مؤقتة) ─────────
+// الأجهزة التانية بتطلع (passwordChangedAt)، وهالجهاز بياخد توكن جديد مشان يضل داخل
+export const changePassword = async (req, res, next) => {
+  const { oldPassword, newPassword } = req.body;
+
+  try {
+    if (typeof oldPassword !== "string" || !oldPassword) throw httpError(422, "اكتب كلمة السر الحالية");
+    const invalid = newPasswordError(newPassword);
+    if (invalid) throw httpError(422, invalid);
+
+    const user = req.user;
+    // 400 مش 401: الـ 401 بيطلّع التطبيق من الحساب
+    if (!(await bcrypt.compare(oldPassword, user.password))) {
+      throw httpError(400, "كلمة السر الحالية غلط");
+    }
+    if (await bcrypt.compare(newPassword, user.password)) {
+      throw httpError(422, "الجديدة نفس القديمة، اختار وحدة تانية");
+    }
+
+    user.password = await bcrypt.hash(newPassword, 12);
+    user.mustChangePassword = false;
+    user.passwordChangedAt = new Date();
+    await user.save();
+
+    res.status(200).json({ message: "تغيّرت كلمة السر", token: signToken(user), ...publicUser(user) });
+  } catch (error) {
+    next(error);
+  }
+};
 
 // ── بيانات المستخدم الحالي (محمي بـ checkSubscription) ─────────────────────
 export const getMe = (req, res) => {

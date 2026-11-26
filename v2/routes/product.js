@@ -5,6 +5,7 @@ import {
   createProduct,
   updateProduct,
   deleteProduct,
+  getPriceHistory,
 } from "../controllers/product.js";
 import { checkSubscription } from "../middleware/checkSubscription.js";
 import { validate } from "../middleware/validate.js";
@@ -49,5 +50,6 @@ router.get("/", listValidators, validate, getProducts);
 router.post("/", createValidators, validate, createProduct);
 router.patch("/:productId", updateValidators, validate, updateProduct);
 router.delete("/:productId", [idParam()], validate, deleteProduct);
+router.get("/:productId/history", [idParam()], validate, getPriceHistory);
 
 export default router;

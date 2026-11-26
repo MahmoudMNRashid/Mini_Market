@@ -6,6 +6,7 @@ import { httpError, isDuplicateKey } from "../utils/httpError.js";
 import { scanInvoiceWithFallback } from "../utils/invoiceScan.js";
 import { checkInvoice, checkLine } from "../utils/invoiceCheck.js";
 import { aliasKey, buildIndex, matchLine } from "../utils/invoiceMatch.js";
+import { priceEntry, recordNewPrice, recordPriceChange, safely } from "../utils/priceHistory.js";
 import { DAILY_SCAN_LIMIT, damascusDay, nextQuota } from "../utils/scanQuota.js";
 
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
@@ -132,7 +133,7 @@ const createLine = async (userId, line, ownedCategories) => {
   const categoryId = line.categoryId || null;
   if (categoryId && !ownedCategories.has(String(categoryId))) throw httpError(404, "الفئة غير موجودة");
 
-  return Product.create({
+  const product = await Product.create({
     userId,
     productName: line.productName,
     wholesalePackagePrice: line.wholesalePackagePrice,
@@ -142,6 +143,8 @@ const createLine = async (userId, line, ownedCategories) => {
     latestWholeprice: new Date(),
     categoryId,
   });
+  await safely(() => recordNewPrice(userId, product, "invoice"));
+  return product;
 };
 
 // بالتعديل منغيّر حقول السعر بس (الاسم والفئة بيضلوا متل ما المستخدم حاططهم)
@@ -157,10 +160,12 @@ const updateLine = async (userId, line) => {
     return product;
   }
 
+  const before = priceEntry(userId, product, null);
   for (const f of fields) product[f] = line[f];
   product.wholesaleUnitPrice = round(product.wholesalePackagePrice / product.unitsPerPackage);
   product.latestWholeprice = new Date();
   await product.save();
+  await safely(() => recordPriceChange(userId, before, product, "invoice"));
   return product;
 };
 
