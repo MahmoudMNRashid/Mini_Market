@@ -20,8 +20,8 @@ app.get("/test", async (req, res) => {
 });
 
 // رابط تنزيل التطبيق الثابت للزباين: بيحوّل لآخر APK على GitHub Releases
-// (كل نسخة جديدة: release جديد بنفس اسم الملف app.apk، والرابط ما بيتغير)
-const APK_URL = "https://github.com/MahmoudMNRashid/taseera/releases/latest/download/app.apk";
+// (كل نسخة جديدة: release جديد بنفس اسم الملف taseera.apk، والرابط ما بيتغير)
+const APK_URL = "https://github.com/MahmoudMNRashid/taseera/releases/latest/download/taseera.apk";
 app.get("/app", (req, res) => res.redirect(302, APK_URL));
 
 // سجل أخطاء التطبيق: حد صغير للحجم (أكبر من هيك ← 413 قبل ما يوصل للكود)
