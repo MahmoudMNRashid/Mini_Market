@@ -3,3 +3,4 @@ test.js
 .env
 # صور فواتير حقيقية (فيها أرقام موردين) + نتائج التجربة
 dev-tools/invoice-samples/
+scripts/migrate-v1-report.json
